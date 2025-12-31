@@ -127,7 +127,7 @@ bool loadFont(NDSRom& rom, const std::string& fontName, FontInfo& font) {
 void extractFont(const FontInfo& font, const char* outDir) {
     int glyphW = font.glyphWidth;
     int glyphH = font.glyphHeight;
-    int bytesPerGlyph = (glyphW * glyphH * 2) / 8;  // 2bpp
+    int bytesPerGlyph = (glyphW * glyphH) / 8;  // 1bpp: 1 bit per pixel
 
     // Arrange glyphs in a grid (16 per row)
     int glyphsPerRow = 16;
@@ -137,14 +137,6 @@ void extractFont(const FontInfo& font, const char* outDir) {
 
     std::vector<Color> pixels(sheetW * sheetH, {0, 0, 0, 0});
 
-    // 2bpp grayscale palette (white text on transparent)
-    Color palette[4] = {
-        {0, 0, 0, 0},       // 0 = transparent
-        {85, 85, 85, 255},  // 1 = dark gray
-        {170, 170, 170, 255}, // 2 = light gray
-        {255, 255, 255, 255}  // 3 = white
-    };
-
     for (int g = 0; g < font.numChars; g++) {
         int gridX = g % glyphsPerRow;
         int gridY = g / glyphsPerRow;
@@ -152,19 +144,23 @@ void extractFont(const FontInfo& font, const char* outDir) {
 
         if (glyphDataOffset + bytesPerGlyph > (int)font.imgData.size()) continue;
 
-        // Decode 2bpp glyph
+        // Decode 1bpp glyph (MSB first, row-major)
         for (int py = 0; py < glyphH; py++) {
             for (int px = 0; px < glyphW; px++) {
-                int pixelIdx = py * glyphW + px;
-                int byteIdx = pixelIdx / 4;
-                int bitOffset = (pixelIdx % 4) * 2;
+                int bitIdx = py * glyphW + px;
+                int byteIdx = bitIdx / 8;
+                int bitOffset = 7 - (bitIdx % 8);  // MSB first
 
                 uint8_t byte = font.imgData[glyphDataOffset + byteIdx];
-                uint8_t colorIdx = (byte >> bitOffset) & 0x03;
+                uint8_t bit = (byte >> bitOffset) & 1;
 
                 int imgX = gridX * glyphW + px;
                 int imgY = gridY * glyphH + py;
-                pixels[imgY * sheetW + imgX] = palette[colorIdx];
+
+                // White text on transparent background
+                if (bit) {
+                    pixels[imgY * sheetW + imgX] = {255, 255, 255, 255};
+                }
             }
         }
     }

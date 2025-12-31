@@ -69,8 +69,9 @@ Each font consists of 3 files in `/font/`:
 
 ### Image Format
 
-- 2 bits per pixel (4 colors)
-- Palette: transparent, dark gray, light gray, white
+- 1 bit per pixel (monochrome)
+- 0 = transparent, 1 = white
+- MSB first within each byte
 - Glyphs stored sequentially, row-major order
 
 ## License

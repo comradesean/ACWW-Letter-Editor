@@ -665,26 +665,26 @@ Character codes typically start at 0x20 (space) and include standard ASCII plus 
 
 Glyph bitmap data, may be LZ77 compressed.
 
-**Pixel Format**: 2 bits per pixel (4 colors)
+**Pixel Format**: 1 bit per pixel (monochrome)
 
 | Value | Color |
 |-------|-------|
 | 0 | Transparent |
-| 1 | Dark gray (33%) |
-| 2 | Light gray (67%) |
-| 3 | White (100%) |
+| 1 | White (opaque) |
 
-**Storage**: Glyphs stored sequentially in row-major order. Each glyph is `(width × height × 2) / 8` bytes.
+**Storage**: Glyphs stored sequentially in row-major order. Each glyph is `(width × height) / 8` bytes.
 
-**Byte Layout** (2bpp, LSB first):
+**Byte Layout** (1bpp, MSB first):
 ```
-Byte: [P0:2] [P1:2] [P2:2] [P3:2]
-      bits 0-1  2-3   4-5   6-7
+Byte: [P7] [P6] [P5] [P4] [P3] [P2] [P1] [P0]
+      bit7 bit6 bit5 bit4 bit3 bit2 bit1 bit0
+
+First pixel is in bit 7 (MSB), last pixel in bit 0 (LSB)
 ```
 
 **Size Calculation**:
-- 16×16 glyph @ 2bpp = 32 bytes per glyph
-- 8×8 glyph @ 2bpp = 8 bytes per glyph
+- 16×16 glyph @ 1bpp = 32 bytes per glyph (2 bytes per row × 16 rows)
+- 8×8 glyph @ 1bpp = 8 bytes per glyph (1 byte per row × 8 rows)
 - Total: `numChars × bytesPerGlyph`
 
 ### 6.6 Extraction Algorithm
@@ -694,11 +694,11 @@ Byte: [P0:2] [P1:2] [P2:2] [P3:2]
 2. Decompress each file if LZ77 compressed
 3. Parse header to get character count and glyph dimensions
 4. Parse attributes to get character codes and widths
-5. Calculate bytes per glyph: (width × height × 2) / 8
+5. Calculate bytes per glyph: (width × height) / 8
 6. For each glyph:
    a. Read bytesPerGlyph bytes from image data
-   b. Decode 2bpp pixels (4 pixels per byte, LSB first)
-   c. Map pixel values to grayscale (0=transparent, 1=dark, 2=light, 3=white)
+   b. Decode 1bpp pixels (8 pixels per byte, MSB first)
+   c. Map bit values to colors (0=transparent, 1=white)
 7. Arrange glyphs in spritesheet grid (typically 16 columns)
 8. Export as PNG with transparency
 ```
