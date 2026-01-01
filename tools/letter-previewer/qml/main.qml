@@ -270,6 +270,10 @@ ApplicationWindow {
                             { title: "File", items: [
                                 { text: "Open ROM...", shortcut: "Ctrl+O", actionId: "openRom", disabledWhen: "loaded" },
                                 { separator: true },
+                                { text: "Import Letter...", shortcut: "Ctrl+I", actionId: "importLtr", enabledWhen: "loaded" },
+                                { text: "Export Letter...", shortcut: "Ctrl+E", actionId: "exportLtr", enabledWhen: "loaded" },
+                                { text: "Export as PNG...", shortcut: "Ctrl+P", actionId: "exportPng", enabledWhen: "loaded" },
+                                { separator: true },
                                 { text: "Exit", shortcut: "Alt+F4", actionId: "exit" }
                             ]},
                             { title: "Edit", items: [
@@ -328,7 +332,8 @@ ApplicationWindow {
 
                                         Rectangle {
                                             property bool isSeparator: modelData.separator === true
-                                            property bool isDisabled: modelData.disabledWhen === "loaded" && backend.loaded
+                                            property bool isDisabled: (modelData.disabledWhen === "loaded" && backend.loaded) ||
+                                                                      (modelData.enabledWhen === "loaded" && !backend.loaded)
 
                                             width: 160
                                             height: isSeparator ? 9 : 32
@@ -381,6 +386,12 @@ ApplicationWindow {
                                                     var actionId = modelData.actionId
                                                     if (actionId === "openRom") {
                                                         fileDialog.open()
+                                                    } else if (actionId === "importLtr") {
+                                                        importDialog.open()
+                                                    } else if (actionId === "exportLtr") {
+                                                        exportDialog.open()
+                                                    } else if (actionId === "exportPng") {
+                                                        pngDialog.open()
                                                     } else if (actionId === "exit") {
                                                         Qt.quit()
                                                     } else if (actionId === "clearLetter") {
@@ -649,10 +660,94 @@ ApplicationWindow {
                             }
                         }
 
+                        // Tooltip overlay for greeting line (recipient) - hover only
+                        MouseArea {
+                            id: greetingHover
+                            x: 96   // Header at x=48 in 1x, scaled 2x = 96
+                            y: 80   // Header at y=40 in 1x, scaled 2x = 80
+                            width: 300
+                            height: 32
+                            hoverEnabled: true
+                            visible: backend.recipientName !== "" || backend.recipientTown !== ""
+                            acceptedButtons: Qt.NoButton  // Don't capture clicks
+
+                            ToolTip {
+                                id: recipientTooltip
+                                visible: greetingHover.containsMouse && (backend.recipientName !== "" || backend.recipientTown !== "")
+                                delay: 400
+                                timeout: 5000
+
+                                background: Rectangle {
+                                    color: bgElevated
+                                    radius: 6
+                                    border.color: divider
+                                    border.width: 1
+                                }
+
+                                contentItem: Text {
+                                    text: {
+                                        if (backend.recipientName !== "" && backend.recipientTown !== "")
+                                            return "To: " + backend.recipientName + " from " + backend.recipientTown
+                                        else if (backend.recipientName !== "")
+                                            return "To: " + backend.recipientName
+                                        else if (backend.recipientTown !== "")
+                                            return "To: " + backend.recipientTown
+                                        return ""
+                                    }
+                                    font.pixelSize: 12
+                                    color: textPrimary
+                                }
+                            }
+                        }
+
+                        // Tooltip overlay for signature line (sender) - hover only
+                        MouseArea {
+                            id: signatureHover
+                            x: 200  // Footer is right-aligned, roughly in this area
+                            y: 272  // Footer at y=136 in 1x, scaled 2x = 272
+                            width: 280
+                            height: 32
+                            hoverEnabled: true
+                            visible: backend.senderName !== "" || backend.senderTown !== ""
+                            acceptedButtons: Qt.NoButton  // Don't capture clicks
+
+                            ToolTip {
+                                id: senderTooltip
+                                visible: signatureHover.containsMouse && (backend.senderName !== "" || backend.senderTown !== "")
+                                delay: 400
+                                timeout: 5000
+
+                                background: Rectangle {
+                                    color: bgElevated
+                                    radius: 6
+                                    border.color: divider
+                                    border.width: 1
+                                }
+
+                                contentItem: Text {
+                                    text: {
+                                        if (backend.senderName !== "" && backend.senderTown !== "")
+                                            return "From: " + backend.senderName + " from " + backend.senderTown
+                                        else if (backend.senderName !== "")
+                                            return "From: " + backend.senderName
+                                        else if (backend.senderTown !== "")
+                                            return "From: " + backend.senderTown
+                                        return ""
+                                    }
+                                    font.pixelSize: 12
+                                    color: textPrimary
+                                }
+                            }
+                        }
+
+                        // Main click handler - on top
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.IBeamCursor
-                            onClicked: canvas.forceActiveFocus()
+                            onClicked: {
+                                canvas.handleClick(mouse.x, mouse.y)
+                                canvas.forceActiveFocus()
+                            }
                         }
                     }
                 }
@@ -897,6 +992,24 @@ ApplicationWindow {
     }
 
     Shortcut {
+        sequence: "Ctrl+I"
+        enabled: backend.loaded
+        onActivated: importDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+E"
+        enabled: backend.loaded
+        onActivated: exportDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+P"
+        enabled: backend.loaded
+        onActivated: pngDialog.open()
+    }
+
+    Shortcut {
         sequence: "Ctrl+N"
         enabled: backend.loaded
         onActivated: { canvas.clearText(); paperCombo.currentIndex = 0 }
@@ -914,7 +1027,7 @@ ApplicationWindow {
         onActivated: paperCombo.currentIndex--
     }
 
-    // File dialog
+    // File dialogs
     FileDialog {
         id: fileDialog
         title: "Select Animal Crossing: Wild World ROM"
@@ -923,6 +1036,43 @@ ApplicationWindow {
             if (backend.loadRom(fileDialog.fileUrl)) {
                 canvas.forceActiveFocus()
             }
+        }
+    }
+
+    FileDialog {
+        id: importDialog
+        title: "Import Letter"
+        nameFilters: ["Letter Files (*.ltr)", "All Files (*)"]
+        onAccepted: {
+            if (backend.importLtr(importDialog.fileUrl)) {
+                canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                paperCombo.currentIndex = backend.currentPaper
+                canvas.forceActiveFocus()
+            }
+        }
+    }
+
+    FileDialog {
+        id: exportDialog
+        title: "Export Letter"
+        selectExisting: false
+        nameFilters: ["Letter Files (*.ltr)", "All Files (*)"]
+        onAccepted: {
+            // Sync canvas text to backend before export
+            backend.letterText = canvas.text
+            backend.exportLtr(exportDialog.fileUrl)
+        }
+    }
+
+    FileDialog {
+        id: pngDialog
+        title: "Export as PNG"
+        selectExisting: false
+        nameFilters: ["PNG Images (*.png)", "All Files (*)"]
+        onAccepted: {
+            // Sync canvas text to backend before export
+            backend.letterText = canvas.text
+            backend.exportPng(pngDialog.fileUrl, 2)  // 2x scale (512x384)
         }
     }
 

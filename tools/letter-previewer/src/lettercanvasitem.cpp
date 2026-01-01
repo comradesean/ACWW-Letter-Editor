@@ -45,10 +45,165 @@ void LetterCanvasItem::setCursorPosition(int pos) {
     }
 }
 
+// Returns 0 for header, 1 for body, 2 for footer
+int LetterCanvasItem::getSection(int pos) const {
+    int firstNewline = m_text.indexOf('\n');
+    if (firstNewline < 0) return 0;  // No newlines, all header
+    if (pos <= firstNewline) return 0;  // Header
+
+    int lastNewline = m_text.lastIndexOf('\n');
+    if (lastNewline == firstNewline) return 1;  // Only one newline, rest is body
+    if (pos <= lastNewline) return 1;  // Body (including body newlines)
+
+    return 2;  // Footer
+}
+
+int LetterCanvasItem::getBodyStartPos() const {
+    int firstNewline = m_text.indexOf('\n');
+    return (firstNewline >= 0) ? firstNewline + 1 : m_text.length();
+}
+
+int LetterCanvasItem::getFooterStartPos() const {
+    int lastNewline = m_text.lastIndexOf('\n');
+    return (lastNewline >= 0) ? lastNewline + 1 : m_text.length();
+}
+
+QString LetterCanvasItem::getHeader() const {
+    int firstNewline = m_text.indexOf('\n');
+    if (firstNewline < 0) return m_text;
+    return m_text.left(firstNewline);
+}
+
+QString LetterCanvasItem::getBody() const {
+    int firstNewline = m_text.indexOf('\n');
+    if (firstNewline < 0) return "";
+    int lastNewline = m_text.lastIndexOf('\n');
+    if (lastNewline == firstNewline) return m_text.mid(firstNewline + 1);
+    return m_text.mid(firstNewline + 1, lastNewline - firstNewline - 1);
+}
+
+QString LetterCanvasItem::getFooter() const {
+    int lastNewline = m_text.lastIndexOf('\n');
+    if (lastNewline < 0) return "";
+    return m_text.mid(lastNewline + 1);
+}
+
+// Wrap body text into visual lines based on glyph width (word-wrap)
+// Returns list of (text, startPosInBody) pairs for each visual line
+QVector<QPair<QString, int>> LetterCanvasItem::wrapBodyText() const {
+    QVector<QPair<QString, int>> visualLines;
+    if (!m_backend || !m_backend->isLoaded()) {
+        for (int i = 0; i < BODY_LINES; i++) {
+            visualLines.append(qMakePair(QString(""), 0));
+        }
+        return visualLines;
+    }
+
+    QString body = getBody();
+    const FontLoader& font = m_backend->font();
+
+    int lineIdx = 0;
+    int pos = 0;
+
+    while (lineIdx < BODY_LINES && pos < body.length()) {
+        QString lineText;
+        int lineStartPos = pos;
+        int lineWidth = 0;
+        int lastSpacePos = -1;      // Position after last space in lineText
+        int lastSpaceBodyPos = -1;  // Corresponding position in body
+        int lastSpaceWidth = 0;     // Width up to and including last space
+
+        while (pos < body.length()) {
+            QChar ch = body[pos];
+
+            // Explicit newline - end this line and move to next
+            if (ch == '\n') {
+                pos++;  // Skip the newline
+                break;
+            }
+
+            int charWidth = font.charWidth(ch) + GLYPH_SPACING;
+
+            // Check if this char would exceed line width
+            if (lineWidth + charWidth > MAX_LINE_WIDTH && !lineText.isEmpty()) {
+                // Line is full - try to wrap at last space
+                if (lastSpacePos > 0) {
+                    // Wrap at last space - trim trailing space
+                    lineText = lineText.left(lastSpacePos - 1);
+                    pos = lastSpaceBodyPos;
+                }
+                // else: no space found, hard break at current position
+                break;
+            }
+
+            lineText += ch;
+            lineWidth += charWidth;
+            pos++;
+
+            // Track last space position for word wrapping
+            if (ch == ' ') {
+                lastSpacePos = lineText.length();
+                lastSpaceBodyPos = pos;
+                lastSpaceWidth = lineWidth;
+            }
+        }
+
+        visualLines.append(qMakePair(lineText, lineStartPos));
+        lineIdx++;
+    }
+
+    // Fill remaining lines with empty
+    while (visualLines.size() < BODY_LINES) {
+        visualLines.append(qMakePair(QString(""), pos));
+    }
+
+    return visualLines;
+}
+
 void LetterCanvasItem::insertChar(const QString& ch) {
     if (!ch.isEmpty() && ch[0].isPrint() && ch[0].unicode() < 128) {
+        if (!m_backend || !m_backend->isLoaded()) return;
+
+        int section = getSection(m_cursorPos);
+
+        // Check section character limits
+        if (section == 0) {
+            if (getHeader().length() >= MAX_HEADER_CHARS) return;
+        } else if (section == 1) {
+            if (getBody().length() >= MAX_BODY_CHARS) return;
+            // Check if body would overflow 4 visual lines
+            QString testBody = getBody();
+            int bodyOffset = m_cursorPos - getBodyStartPos();
+            testBody.insert(bodyOffset, ch);
+            // Temporarily check if this would fit
+            QString origBody = getBody();
+            // We'll check after insertion if it overflows
+        } else {
+            if (getFooter().length() >= MAX_FOOTER_CHARS) return;
+        }
+
         m_text.insert(m_cursorPos, ch);
         m_cursorPos++;
+
+        // For body, check if we overflowed visual lines
+        if (section == 1) {
+            auto lines = wrapBodyText();
+            // Check if body text extends beyond 4 lines
+            QString body = getBody();
+            int renderedChars = 0;
+            for (const auto& line : lines) {
+                renderedChars += line.first.length();
+            }
+            // Count newlines in body separately (they take a slot but aren't in rendered text)
+            int newlinesInBody = body.count('\n');
+            if (renderedChars + newlinesInBody < body.length()) {
+                // Overflow - revert
+                m_cursorPos--;
+                m_text.remove(m_cursorPos, 1);
+                return;
+            }
+        }
+
         m_cursorVisible = true;
         emit textChanged();
         emit cursorPositionChanged();
@@ -58,6 +213,14 @@ void LetterCanvasItem::insertChar(const QString& ch) {
 
 void LetterCanvasItem::backspace() {
     if (m_cursorPos > 0) {
+        int section = getSection(m_cursorPos);
+        int prevSection = getSection(m_cursorPos - 1);
+
+        // Don't allow backspace across section boundaries (deleting the section-separating newline)
+        if (section != prevSection) {
+            return;
+        }
+
         m_text.remove(m_cursorPos - 1, 1);
         m_cursorPos--;
         m_cursorVisible = true;
@@ -69,6 +232,14 @@ void LetterCanvasItem::backspace() {
 
 void LetterCanvasItem::deleteChar() {
     if (m_cursorPos < m_text.length()) {
+        int section = getSection(m_cursorPos);
+        int nextSection = getSection(m_cursorPos + 1);
+
+        // Don't allow delete across section boundaries
+        if (section != nextSection && m_text[m_cursorPos] == '\n') {
+            return;
+        }
+
         m_text.remove(m_cursorPos, 1);
         m_cursorVisible = true;
         emit textChanged();
@@ -95,6 +266,19 @@ void LetterCanvasItem::moveCursorRight() {
 }
 
 void LetterCanvasItem::newLine() {
+    int section = getSection(m_cursorPos);
+
+    // Only allow newline within body section
+    if (section != 1) {
+        return;
+    }
+
+    // Check if adding a newline would overflow
+    QString body = getBody();
+    if (body.count('\n') >= 3) {
+        return;  // Already have 3 explicit newlines in body (4 logical lines max)
+    }
+
     m_text.insert(m_cursorPos, '\n');
     m_cursorPos++;
     m_cursorVisible = true;
@@ -104,12 +288,109 @@ void LetterCanvasItem::newLine() {
 }
 
 void LetterCanvasItem::clearText() {
-    m_text.clear();
+    setLetterContent("", "", "");
+}
+
+void LetterCanvasItem::setLetterContent(const QString& header, const QString& body, const QString& footer) {
+    // Truncate to limits
+    QString h = header.left(MAX_HEADER_CHARS);
+    QString b = body.left(MAX_BODY_CHARS);
+    QString f = footer.left(MAX_FOOTER_CHARS);
+
+    // Build text in format: header\nbody\nfooter
+    m_text = h + "\n" + b + "\n" + f;
     m_cursorPos = 0;
     m_cursorVisible = true;
     emit textChanged();
     emit cursorPositionChanged();
     update();
+}
+
+void LetterCanvasItem::handleClick(qreal x, qreal y) {
+    if (!m_backend || !m_backend->isLoaded()) return;
+
+    // Ensure text has proper structure
+    if (m_text.count('\n') < 2) {
+        m_text = "\n\n";
+        emit textChanged();
+    }
+
+    // Convert from widget coordinates to 1x coordinates
+    qreal scaleX = width() / 256.0;
+    qreal scaleY = height() / 192.0;
+    qreal scale = qMin(scaleX, scaleY);
+
+    int scaledW = static_cast<int>(256 * scale);
+    int scaledH = static_cast<int>(192 * scale);
+    int offsetX = (width() - scaledW) / 2;
+    int offsetY = (height() - scaledH) / 2;
+
+    // Convert to 1x coordinates
+    int localX = static_cast<int>((x - offsetX) / scale);
+    int localY = static_cast<int>((y - offsetY) / scale);
+
+    const FontLoader& font = m_backend->font();
+    int newCursorPos = 0;
+
+    // Determine which region was clicked
+    if (localY >= HEADER_TOP && localY < HEADER_TOP + LINE_HEIGHT) {
+        // Header
+        QString header = getHeader();
+        int charPos = findCharPosAtX(header, localX, HEADER_LEFT, font);
+        newCursorPos = charPos;
+    } else if (localY >= BODY_TOP && localY < BODY_TOP + BODY_LINES * LINE_HEIGHT) {
+        // Body - determine which visual line
+        int visualLine = (localY - BODY_TOP) / LINE_HEIGHT;
+        auto wrappedLines = wrapBodyText();
+
+        if (visualLine < wrappedLines.size()) {
+            QString lineText = wrappedLines[visualLine].first;
+            int lineStartInBody = wrappedLines[visualLine].second;
+            int charPos = findCharPosAtX(lineText, localX, BODY_LEFT, font);
+            newCursorPos = getBodyStartPos() + lineStartInBody + charPos;
+        } else {
+            newCursorPos = getFooterStartPos() - 1;  // End of body
+        }
+    } else if (localY >= FOOTER_TOP && localY < FOOTER_TOP + LINE_HEIGHT) {
+        // Footer (right-aligned)
+        QString footer = getFooter();
+        int totalWidth = 0;
+        for (const QChar& ch : footer) {
+            totalWidth += font.charWidth(ch) + GLYPH_SPACING;
+        }
+        int footerStartX = FOOTER_RIGHT - totalWidth;
+        int charPos = findCharPosAtX(footer, localX, footerStartX, font);
+        newCursorPos = getFooterStartPos() + charPos;
+    } else {
+        // Clicked outside regions - find nearest
+        if (localY < BODY_TOP) {
+            newCursorPos = getHeader().length();  // End of header
+        } else if (localY < FOOTER_TOP) {
+            newCursorPos = getFooterStartPos() - 1;  // End of body
+        } else {
+            newCursorPos = m_text.length();  // End of footer
+        }
+    }
+
+    setCursorPosition(newCursorPos);
+    m_cursorVisible = true;
+    update();
+}
+
+int LetterCanvasItem::findCharPosAtX(const QString& text, int targetX, int startX, const FontLoader& font) const {
+    int charPos = 0;
+    int currentX = startX;
+
+    for (int i = 0; i < text.length(); i++) {
+        int charWidth = font.charWidth(text[i]) + GLYPH_SPACING;
+        if (targetX < currentX + charWidth / 2) {
+            break;
+        }
+        currentX += charWidth;
+        charPos++;
+    }
+
+    return qMin(charPos, text.length());
 }
 
 void LetterCanvasItem::toggleCursor() {
@@ -159,75 +440,119 @@ void LetterCanvasItem::renderText(QPainter* painter) {
     if (!m_backend || !m_backend->isLoaded()) return;
 
     const FontLoader& font = m_backend->font();
+    int paperIdx = m_backend->currentPaper();
+    QColor textColor = m_backend->stationery().getTextColor(paperIdx);
+    QColor recipientColor = m_backend->stationery().getRecipientColor(paperIdx);
 
-    // Split text into lines
-    QStringList lines = m_text.split('\n');
-    while (lines.size() < 6) {
-        lines.append("");
+    // Get cursor position info
+    int cursorSection = getSection(m_cursorPos);
+
+    // Render header with recipient name in different color
+    QString header = getHeader();
+    int headerCursorCol = (cursorSection == 0) ? m_cursorPos : -1;
+    int recipientStart = m_backend->recipientNameStart();
+    int recipientEnd = m_backend->recipientNameEnd();
+    renderLineWithRecipient(painter, header, HEADER_LEFT, HEADER_TOP, headerCursorCol, font,
+                            textColor, recipientColor, recipientStart, recipientEnd);
+
+    // Render body with wrapping
+    auto wrappedLines = wrapBodyText();
+    int bodyStart = getBodyStartPos();
+    int cursorInBody = (cursorSection == 1) ? m_cursorPos - bodyStart : -1;
+
+    for (int i = 0; i < BODY_LINES && i < wrappedLines.size(); i++) {
+        QString lineText = wrappedLines[i].first;
+        int lineStartInBody = wrappedLines[i].second;
+        int lineEndInBody = lineStartInBody + lineText.length();
+
+        int lineCursorCol = -1;
+        if (cursorInBody >= lineStartInBody && cursorInBody <= lineEndInBody) {
+            lineCursorCol = cursorInBody - lineStartInBody;
+        }
+
+        renderLine(painter, lineText, BODY_LEFT, BODY_TOP + i * LINE_HEIGHT, lineCursorCol, font, false, textColor);
     }
 
-    // Calculate cursor line and column
-    int cursorLine = 0;
-    int cursorCol = 0;
-    int charCount = 0;
-    for (int i = 0; i < m_text.length() && charCount < m_cursorPos; i++) {
-        if (m_text[i] == '\n') {
-            cursorLine++;
-            cursorCol = 0;
+    // Render footer (right-aligned)
+    QString footer = getFooter();
+    int footerStart = getFooterStartPos();
+    int footerCursorCol = (cursorSection == 2) ? m_cursorPos - footerStart : -1;
+    renderLine(painter, footer, FOOTER_RIGHT, FOOTER_TOP, footerCursorCol, font, true, textColor);
+}
+
+void LetterCanvasItem::renderLine(QPainter* painter, const QString& text, int x, int y,
+                                   int cursorCol, const FontLoader& font, bool rightAlign,
+                                   const QColor& textColor) {
+    int drawX = x;
+
+    // Calculate width for right alignment
+    if (rightAlign) {
+        int totalWidth = 0;
+        for (const QChar& ch : text) {
+            totalWidth += font.charWidth(ch) + GLYPH_SPACING;
+        }
+        drawX = x - totalWidth;
+    }
+
+    int startX = drawX;
+
+    for (int col = 0; col < text.length(); col++) {
+        QChar ch = text[col];
+        QImage glyph = font.getColoredGlyph(ch, textColor);
+
+        if (!glyph.isNull()) {
+            painter->drawImage(drawX, y, glyph);
+            drawX += font.charWidth(ch) + GLYPH_SPACING;
         } else {
-            cursorCol++;
+            drawX += font.charWidth(ch) + GLYPH_SPACING;
         }
-        charCount++;
     }
 
-    // Render line helper
-    auto renderLine = [&](const QString& line, int x, int y, int lineIdx, bool rightAlign = false) {
-        int drawX = x;
+    // Draw cursor
+    if (m_cursorVisible && cursorCol >= 0) {
+        int cursorX = startX;
+        for (int col = 0; col < cursorCol && col < text.length(); col++) {
+            cursorX += font.charWidth(text[col]) + GLYPH_SPACING;
+        }
+        painter->setPen(QPen(textColor, 1));
+        painter->drawLine(cursorX, y + 1, cursorX, y + LINE_HEIGHT - 2);
+    }
+}
 
-        // Calculate width for right alignment
-        if (rightAlign) {
-            int totalWidth = 0;
-            for (int i = 0; i < line.length(); i++) {
-                totalWidth += font.charWidth(line[i]) + GLYPH_SPACING;
-            }
-            drawX = x - totalWidth;
+void LetterCanvasItem::renderLineWithRecipient(QPainter* painter, const QString& text, int x, int y,
+                                                int cursorCol, const FontLoader& font,
+                                                const QColor& textColor, const QColor& recipientColor,
+                                                int recipientStart, int recipientEnd) {
+    int drawX = x;
+    int startX = drawX;
+
+    for (int col = 0; col < text.length(); col++) {
+        QChar ch = text[col];
+
+        // Determine color based on whether this character is part of the recipient name
+        QColor charColor = textColor;
+        if (recipientStart >= 0 && recipientEnd >= 0 &&
+            col >= recipientStart && col < recipientEnd) {
+            charColor = recipientColor;
         }
 
-        int startX = drawX;
+        QImage glyph = font.getColoredGlyph(ch, charColor);
 
-        for (int col = 0; col < line.length(); col++) {
-            QChar ch = line[col];
-            const GlyphInfo* glyph = font.getGlyph(ch);
-
-            if (glyph && !glyph->bitmap.isNull()) {
-                painter->drawImage(drawX, y, glyph->bitmap);
-                drawX += glyph->displayWidth + GLYPH_SPACING;
-            } else {
-                drawX += font.charWidth(ch) + GLYPH_SPACING;
-            }
+        if (!glyph.isNull()) {
+            painter->drawImage(drawX, y, glyph);
+            drawX += font.charWidth(ch) + GLYPH_SPACING;
+        } else {
+            drawX += font.charWidth(ch) + GLYPH_SPACING;
         }
-
-        // Draw cursor
-        if (m_cursorVisible && lineIdx == cursorLine) {
-            int cursorX = startX;
-            for (int col = 0; col < cursorCol && col < line.length(); col++) {
-                cursorX += font.charWidth(line[col]) + GLYPH_SPACING;
-            }
-            painter->setPen(QPen(QColor(121, 97, 32), 1));
-            painter->drawLine(cursorX, y + 1, cursorX, y + LINE_HEIGHT - 2);
-        }
-    };
-
-    // Header
-    renderLine(lines[0], HEADER_LEFT, HEADER_TOP, 0);
-
-    // Body (4 lines)
-    for (int i = 0; i < BODY_LINES && i + 1 < lines.size(); i++) {
-        renderLine(lines[i + 1], BODY_LEFT, BODY_TOP + i * LINE_HEIGHT, i + 1);
     }
 
-    // Footer (right-aligned)
-    if (lines.size() > 5) {
-        renderLine(lines[5], FOOTER_RIGHT, FOOTER_TOP, 5, true);
+    // Draw cursor
+    if (m_cursorVisible && cursorCol >= 0) {
+        int cursorX = startX;
+        for (int col = 0; col < cursorCol && col < text.length(); col++) {
+            cursorX += font.charWidth(text[col]) + GLYPH_SPACING;
+        }
+        painter->setPen(QPen(textColor, 1));
+        painter->drawLine(cursorX, y + 1, cursorX, y + LINE_HEIGHT - 2);
     }
 }

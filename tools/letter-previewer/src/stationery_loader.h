@@ -1,5 +1,7 @@
 #pragma once
 #include <QImage>
+#include <QColor>
+#include <QString>
 #include <vector>
 #include <string>
 
@@ -15,6 +17,12 @@ public:
 
     const QImage& getPaper(int index) const;
     int count() const { return static_cast<int>(m_papers.size()); }
+
+    // Get stationery info
+    QString getName(int index) const;
+    uint16_t getItemId(int index) const;
+    QColor getTextColor(int index) const;
+    QColor getRecipientColor(int index) const;
 
 private:
     QImage loadPaper(NDSRom& rom, int paperNum);

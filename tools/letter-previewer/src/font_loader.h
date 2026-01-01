@@ -1,6 +1,7 @@
 #pragma once
 #include <QImage>
 #include <QString>
+#include <QColor>
 #include <map>
 #include <vector>
 #include <cstdint>
@@ -10,7 +11,7 @@ class NDSRom;
 struct GlyphInfo {
     int index;          // Index in the glyph atlas
     int displayWidth;   // Variable width for rendering
-    QImage bitmap;      // Individual glyph bitmap (for easy rendering)
+    QImage mask;        // 1bpp glyph mask (white = text, transparent = background)
 };
 
 class FontLoader {
@@ -27,6 +28,9 @@ public:
 
     // Get display width for a character (or default if not found)
     int charWidth(QChar ch) const;
+
+    // Get a glyph rendered in a specific color
+    QImage getColoredGlyph(QChar ch, const QColor& color) const;
 
 private:
     bool loadFontA(NDSRom& rom);
