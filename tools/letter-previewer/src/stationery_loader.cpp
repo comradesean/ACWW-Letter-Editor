@@ -42,7 +42,7 @@ namespace {
         {"Sparkly paper",     0x1038,   0,  89, 105,  24, 113, 186},  // 0x0E - #005969 text, #1871BA recipient
         {"Vine paper",        0x103C,   8, 121,  81,   0, 162, 113},  // 0x0F - #087951 text, #00A271 recipient
         {"Formal paper",      0x1040, 130,  16,  32, 130,  16,  32},  // 0x10 - #821020 text, #821020 recipient
-        {"Snowman paper",     0x1044, 121, 97, 32, 192, 64, 64},  // 0x11
+        {"Snowman paper",     0x1044,  89,  97, 105,  48, 146, 170},  // 0x11 - #596169 text, #3092AA recipient
         {"Card paper",        0x1048,  89,  97, 105,  89,  89,  89},  // 0x12 - #596169 text, #595959 recipient
         {"Leopard paper",     0x104C,  48,  48,  40, 113,  65,   0},  // 0x13 - #303028 text, #714100 recipient
         {"Cow paper",         0x1050,  89,  89,  65, 243, 105, 105},  // 0x14 - #595941 text, #F36969 recipient
@@ -55,7 +55,7 @@ namespace {
         {"Four-leaf paper",   0x106C,  65,  81,   0,  73, 105,   0},  // 0x1B - #415100 text, #496900 recipient
         {"Town-hall paper",   0x1070,  65, 113,  89,   0, 121,  24},  // 0x1C - #417159 text, #007918 recipient
         {"Tortimer paper",    0x1074,  65, 113, 89,   0, 121, 24},  // 0x1D - #417159 text, #007918 recipient
-        {"Insurance paper",   0x1078, 121, 97, 32, 192, 64, 64},  // 0x1E
+        {"Insurance paper",   0x1078,  89,  81,  81,  89,  81,  81},  // 0x1E - #595151 text, #595151 recipient
         {"Academy paper",     0x107C, 121, 121, 113, 203, 203,  56},  // 0x1F - #797971 text, #CBCB38 recipient
         {"Lovely paper",      0x1080, 195,   0, 154, 219,   0, 113},  // 0x20 - #C3009A text, #DB0071 recipient
         {"Rainbow paper",     0x1084,  97, 105,  97, 251,  65, 251},  // 0x21 - #616961 text, #FB41FB recipient
