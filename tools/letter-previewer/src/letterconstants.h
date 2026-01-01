@@ -12,12 +12,14 @@ namespace LetterConstants {
     constexpr int FOOTER_TOP = 136;
     constexpr int LINE_HEIGHT = 16;
     constexpr int GLYPH_SPACING = 1;
-    constexpr int MAX_LINE_WIDTH = 150;  // Max width in pixels per line
+    constexpr int MAX_LINE_WIDTH = 150;
+    constexpr int MAX_FOOTER_WIDTH = 160;
+    constexpr int NAME_TOKEN_WIDTH = 55;
 
     // Character limits
     // File format: subject (16) + body (100) + signature (26)
     // Display: header can be template (16) + inserted name (8) = 24 max
     constexpr int MAX_HEADER_CHARS = 24;   // Template (16) + Name (8)
-    constexpr int MAX_BODY_CHARS = 100;    // 0x48-0xAB
-    constexpr int MAX_FOOTER_CHARS = 26;   // 0xC8-0xE1
+    constexpr int MAX_BODY_CHARS = 128;
+    constexpr int MAX_FOOTER_CHARS = 32;
 }

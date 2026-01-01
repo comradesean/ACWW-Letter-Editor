@@ -42,12 +42,14 @@ public:
     Q_INVOKABLE void clearText();
     Q_INVOKABLE void handleClick(qreal x, qreal y);
     Q_INVOKABLE void setLetterContent(const QString& header, const QString& body, const QString& footer);
+    Q_INVOKABLE int calculateHeaderWidth(const QString& newRecipientName) const;
 
 signals:
     void backendChanged();
     void textChanged();
     void cursorPositionChanged();
     void cursorVisibleChanged();
+    void recipientNameClicked();
 
 private slots:
     void toggleCursor();
@@ -97,4 +99,5 @@ private:
     static constexpr int MAX_HEADER_CHARS = LetterConstants::MAX_HEADER_CHARS;
     static constexpr int MAX_BODY_CHARS = LetterConstants::MAX_BODY_CHARS;
     static constexpr int MAX_FOOTER_CHARS = LetterConstants::MAX_FOOTER_CHARS;
+    static constexpr int NAME_TOKEN_WIDTH = LetterConstants::NAME_TOKEN_WIDTH;
 };

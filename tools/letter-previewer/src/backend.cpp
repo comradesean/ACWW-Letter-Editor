@@ -76,12 +76,16 @@ static const char* acwwCharTable[256] = {
 static const int LTR_FILE_SIZE = 0xF4;        // 244 bytes
 
 // Receiver (To) field - 0x00-0x13 (20 bytes)
-static const int LTR_TO_TOWN_OFFSET = 0x02;   // 8 bytes (town name)
-static const int LTR_TO_NAME_OFFSET = 0x0C;   // 8 bytes (player name)
+static const int LTR_TO_TOWN_ID_OFFSET = 0x00;     // 2 bytes (uint16)
+static const int LTR_TO_TOWN_OFFSET = 0x02;        // 8 bytes (town name)
+static const int LTR_TO_PLAYER_ID_OFFSET = 0x0A;   // 2 bytes (uint16)
+static const int LTR_TO_NAME_OFFSET = 0x0C;        // 8 bytes (player name)
 
 // Sender (From) field - 0x18-0x2B (20 bytes)
-static const int LTR_FROM_TOWN_OFFSET = 0x1A; // 8 bytes (town name)
-static const int LTR_FROM_NAME_OFFSET = 0x24; // 8 bytes (player name)
+static const int LTR_FROM_TOWN_ID_OFFSET = 0x18;   // 2 bytes (uint16)
+static const int LTR_FROM_TOWN_OFFSET = 0x1A;      // 8 bytes (town name)
+static const int LTR_FROM_PLAYER_ID_OFFSET = 0x22; // 2 bytes (uint16)
+static const int LTR_FROM_NAME_OFFSET = 0x24;      // 8 bytes (player name)
 
 // Letter content
 static const int LTR_SUBJECT_OFFSET = 0x30;   // Greeting/subject template
@@ -191,6 +195,76 @@ void Backend::setLetterText(const QString& text) {
     }
 }
 
+void Backend::setRecipientNameStart(int pos) {
+    if (pos != m_recipientNameStart) {
+        m_recipientNameStart = pos;
+        emit recipientNamePositionChanged();
+    }
+}
+
+void Backend::setRecipientNameEnd(int pos) {
+    if (pos != m_recipientNameEnd) {
+        m_recipientNameEnd = pos;
+        emit recipientNamePositionChanged();
+    }
+}
+
+void Backend::setRecipientName(const QString& name) {
+    if (name != m_recipientName) {
+        m_recipientName = name;
+        emit recipientInfoChanged();
+    }
+}
+
+void Backend::setRecipientTown(const QString& town) {
+    if (town != m_recipientTown) {
+        m_recipientTown = town;
+        emit recipientInfoChanged();
+    }
+}
+
+void Backend::setRecipientTownId(int id) {
+    if (id != m_recipientTownId) {
+        m_recipientTownId = id;
+        emit recipientInfoChanged();
+    }
+}
+
+void Backend::setRecipientPlayerId(int id) {
+    if (id != m_recipientPlayerId) {
+        m_recipientPlayerId = id;
+        emit recipientInfoChanged();
+    }
+}
+
+void Backend::setSenderName(const QString& name) {
+    if (name != m_senderName) {
+        m_senderName = name;
+        emit senderInfoChanged();
+    }
+}
+
+void Backend::setSenderTown(const QString& town) {
+    if (town != m_senderTown) {
+        m_senderTown = town;
+        emit senderInfoChanged();
+    }
+}
+
+void Backend::setSenderTownId(int id) {
+    if (id != m_senderTownId) {
+        m_senderTownId = id;
+        emit senderInfoChanged();
+    }
+}
+
+void Backend::setSenderPlayerId(int id) {
+    if (id != m_senderPlayerId) {
+        m_senderPlayerId = id;
+        emit senderInfoChanged();
+    }
+}
+
 QImage Backend::getPaperImage(int index) const {
     if (index >= 0 && index < m_stationery.count()) {
         return m_stationery.getPaper(index);
@@ -281,17 +355,25 @@ bool Backend::importLtr(const QUrl& fileUrl) {
         return false;
     }
 
-    // Extract recipient name and town from To field
-    QByteArray toNameBytes = data.mid(LTR_TO_NAME_OFFSET, 8);
-    QString recipientName = decodeAcwwText(toNameBytes);
+    // Extract recipient name, town, and IDs from To field
+    uint16_t recipientTownId = static_cast<uint8_t>(data[LTR_TO_TOWN_ID_OFFSET]) |
+                               (static_cast<uint8_t>(data[LTR_TO_TOWN_ID_OFFSET + 1]) << 8);
     QByteArray toTownBytes = data.mid(LTR_TO_TOWN_OFFSET, 8);
     QString recipientTown = decodeAcwwText(toTownBytes);
+    uint16_t recipientPlayerId = static_cast<uint8_t>(data[LTR_TO_PLAYER_ID_OFFSET]) |
+                                 (static_cast<uint8_t>(data[LTR_TO_PLAYER_ID_OFFSET + 1]) << 8);
+    QByteArray toNameBytes = data.mid(LTR_TO_NAME_OFFSET, 8);
+    QString recipientName = decodeAcwwText(toNameBytes);
 
-    // Extract sender name and town from From field
-    QByteArray fromNameBytes = data.mid(LTR_FROM_NAME_OFFSET, 8);
-    QString senderName = decodeAcwwText(fromNameBytes);
+    // Extract sender name, town, and IDs from From field
+    uint16_t senderTownId = static_cast<uint8_t>(data[LTR_FROM_TOWN_ID_OFFSET]) |
+                            (static_cast<uint8_t>(data[LTR_FROM_TOWN_ID_OFFSET + 1]) << 8);
     QByteArray fromTownBytes = data.mid(LTR_FROM_TOWN_OFFSET, 8);
     QString senderTown = decodeAcwwText(fromTownBytes);
+    uint16_t senderPlayerId = static_cast<uint8_t>(data[LTR_FROM_PLAYER_ID_OFFSET]) |
+                              (static_cast<uint8_t>(data[LTR_FROM_PLAYER_ID_OFFSET + 1]) << 8);
+    QByteArray fromNameBytes = data.mid(LTR_FROM_NAME_OFFSET, 8);
+    QString senderName = decodeAcwwText(fromNameBytes);
 
     // Extract subject/greeting template
     QByteArray subjectBytes = data.mid(LTR_SUBJECT_OFFSET, LTR_SUBJECT_SIZE);
@@ -304,7 +386,7 @@ bool Backend::importLtr(const QUrl& fileUrl) {
     QString subject;
     int recipientStart = -1;
     int recipientEnd = -1;
-    if (namePos > 0 && namePos <= subjectTemplate.length() && !recipientName.isEmpty()) {
+    if (namePos >= 0 && namePos <= subjectTemplate.length() && !recipientName.isEmpty()) {
         subject = subjectTemplate.left(namePos) + recipientName + subjectTemplate.mid(namePos);
         recipientStart = namePos;
         recipientEnd = namePos + recipientName.length();
@@ -339,8 +421,12 @@ bool Backend::importLtr(const QUrl& fileUrl) {
     // Update state
     m_recipientName = recipientName;
     m_recipientTown = recipientTown;
+    m_recipientTownId = recipientTownId;
+    m_recipientPlayerId = recipientPlayerId;
     m_senderName = senderName;
     m_senderTown = senderTown;
+    m_senderTownId = senderTownId;
+    m_senderPlayerId = senderPlayerId;
     m_recipientNameStart = recipientStart;
     m_recipientNameEnd = recipientEnd;
     setLetterText(letterText);
@@ -406,6 +492,34 @@ bool Backend::exportLtr(const QUrl& fileUrl) const {
 
     // Write paper ID
     data[LTR_PAPER_OFFSET] = static_cast<char>(m_currentPaper & 0x3F);
+
+    // Write recipient info
+    data[LTR_TO_TOWN_ID_OFFSET] = static_cast<char>(m_recipientTownId & 0xFF);
+    data[LTR_TO_TOWN_ID_OFFSET + 1] = static_cast<char>((m_recipientTownId >> 8) & 0xFF);
+    QByteArray recipientTownEncoded = encodeAcwwText(m_recipientTown, 8);
+    for (int i = 0; i < 8; i++) {
+        data[LTR_TO_TOWN_OFFSET + i] = recipientTownEncoded[i];
+    }
+    data[LTR_TO_PLAYER_ID_OFFSET] = static_cast<char>(m_recipientPlayerId & 0xFF);
+    data[LTR_TO_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_recipientPlayerId >> 8) & 0xFF);
+    QByteArray recipientNameEncoded = encodeAcwwText(m_recipientName, 8);
+    for (int i = 0; i < 8; i++) {
+        data[LTR_TO_NAME_OFFSET + i] = recipientNameEncoded[i];
+    }
+
+    // Write sender info
+    data[LTR_FROM_TOWN_ID_OFFSET] = static_cast<char>(m_senderTownId & 0xFF);
+    data[LTR_FROM_TOWN_ID_OFFSET + 1] = static_cast<char>((m_senderTownId >> 8) & 0xFF);
+    QByteArray senderTownEncoded = encodeAcwwText(m_senderTown, 8);
+    for (int i = 0; i < 8; i++) {
+        data[LTR_FROM_TOWN_OFFSET + i] = senderTownEncoded[i];
+    }
+    data[LTR_FROM_PLAYER_ID_OFFSET] = static_cast<char>(m_senderPlayerId & 0xFF);
+    data[LTR_FROM_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_senderPlayerId >> 8) & 0xFF);
+    QByteArray senderNameEncoded = encodeAcwwText(m_senderName, 8);
+    for (int i = 0; i < 8; i++) {
+        data[LTR_FROM_NAME_OFFSET + i] = senderNameEncoded[i];
+    }
 
     // Write file
     QFile file(path);

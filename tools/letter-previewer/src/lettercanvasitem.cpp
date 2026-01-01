@@ -165,10 +165,40 @@ void LetterCanvasItem::insertChar(const QString& ch) {
         if (!m_backend || !m_backend->isLoaded()) return;
 
         int section = getSection(m_cursorPos);
+        int insertPos = m_cursorPos;  // Save position before insertion
 
         // Check section character limits
         if (section == 0) {
-            if (getHeader().length() >= MAX_HEADER_CHARS) return;
+            int recipientStart = m_backend->recipientNameStart();
+            int recipientEnd = m_backend->recipientNameEnd();
+            int recipientLen = (recipientStart >= 0 && recipientEnd >= 0) ? (recipientEnd - recipientStart) : 0;
+
+            // Check char limit excluding recipient name (24 chars total, name doesn't count)
+            int headerLenWithoutName = getHeader().length() - recipientLen;
+            if (headerLenWithoutName >= MAX_HEADER_CHARS) return;
+
+            // Check pixel width limit (name token = fixed 54px)
+            QString testHeader = getHeader();
+            int headerOffset = m_cursorPos;
+            testHeader.insert(headerOffset, ch);
+            int testWidth = 0;
+            const FontLoader& font = m_backend->font();
+            for (int i = 0; i < testHeader.length(); i++) {
+                // Skip recipient name chars - use fixed token width instead
+                if (recipientStart >= 0 && recipientEnd >= 0 &&
+                    i >= recipientStart && i < recipientEnd + 1) {  // +1 for inserted char shift
+                    if (i == recipientStart) testWidth += NAME_TOKEN_WIDTH;
+                    continue;
+                }
+                testWidth += font.charWidth(testHeader[i]) + GLYPH_SPACING;
+            }
+            if (testWidth > MAX_LINE_WIDTH) return;
+
+            // Protect recipient name - don't allow inserting within it
+            if (recipientStart >= 0 && recipientEnd >= 0 &&
+                m_cursorPos > recipientStart && m_cursorPos < recipientEnd) {
+                return;
+            }
         } else if (section == 1) {
             if (getBody().length() >= MAX_BODY_CHARS) return;
             // Check if body would overflow 4 visual lines
@@ -180,6 +210,17 @@ void LetterCanvasItem::insertChar(const QString& ch) {
             // We'll check after insertion if it overflows
         } else {
             if (getFooter().length() >= MAX_FOOTER_CHARS) return;
+
+            // Check pixel width limit
+            QString testFooter = getFooter();
+            int footerOffset = m_cursorPos - getFooterStartPos();
+            testFooter.insert(footerOffset, ch);
+            int testWidth = 0;
+            const FontLoader& font = m_backend->font();
+            for (const QChar& c : testFooter) {
+                testWidth += font.charWidth(c) + GLYPH_SPACING;
+            }
+            if (testWidth > LetterConstants::MAX_FOOTER_WIDTH) return;
         }
 
         m_text.insert(m_cursorPos, ch);
@@ -188,19 +229,23 @@ void LetterCanvasItem::insertChar(const QString& ch) {
         // For body, check if we overflowed visual lines
         if (section == 1) {
             auto lines = wrapBodyText();
-            // Check if body text extends beyond 4 lines
             QString body = getBody();
-            int renderedChars = 0;
-            for (const auto& line : lines) {
-                renderedChars += line.first.length();
-            }
-            // Count newlines in body separately (they take a slot but aren't in rendered text)
-            int newlinesInBody = body.count('\n');
-            if (renderedChars + newlinesInBody < body.length()) {
-                // Overflow - revert
+            int lastLineEnd = lines[BODY_LINES - 1].second + lines[BODY_LINES - 1].first.length();
+            if (lastLineEnd < body.length() && body[lastLineEnd] != '\n') {
+                // Text overflowed beyond 4 lines - revert
                 m_cursorPos--;
                 m_text.remove(m_cursorPos, 1);
                 return;
+            }
+        }
+
+        // For header, shift recipient name position if we inserted before it
+        if (section == 0) {
+            int recipientStart = m_backend->recipientNameStart();
+            int recipientEnd = m_backend->recipientNameEnd();
+            if (recipientStart >= 0 && recipientEnd >= 0 && insertPos <= recipientStart) {
+                m_backend->setRecipientNameStart(recipientStart + 1);
+                m_backend->setRecipientNameEnd(recipientEnd + 1);
             }
         }
 
@@ -219,6 +264,25 @@ void LetterCanvasItem::backspace() {
         // Don't allow backspace across section boundaries (deleting the section-separating newline)
         if (section != prevSection) {
             return;
+        }
+
+        // In header section, protect the recipient name
+        if (section == 0 && m_backend) {
+            int recipientStart = m_backend->recipientNameStart();
+            int recipientEnd = m_backend->recipientNameEnd();
+            int deletePos = m_cursorPos - 1;
+
+            // Don't allow deleting characters within the recipient name
+            if (recipientStart >= 0 && recipientEnd >= 0 &&
+                deletePos >= recipientStart && deletePos < recipientEnd) {
+                return;
+            }
+
+            // If deleting before the recipient name, shift the name positions
+            if (recipientStart >= 0 && recipientEnd >= 0 && deletePos < recipientStart) {
+                m_backend->setRecipientNameStart(recipientStart - 1);
+                m_backend->setRecipientNameEnd(recipientEnd - 1);
+            }
         }
 
         m_text.remove(m_cursorPos - 1, 1);
@@ -240,6 +304,25 @@ void LetterCanvasItem::deleteChar() {
             return;
         }
 
+        // In header section, protect the recipient name
+        if (section == 0 && m_backend) {
+            int recipientStart = m_backend->recipientNameStart();
+            int recipientEnd = m_backend->recipientNameEnd();
+            int deletePos = m_cursorPos;
+
+            // Don't allow deleting characters within the recipient name
+            if (recipientStart >= 0 && recipientEnd >= 0 &&
+                deletePos >= recipientStart && deletePos < recipientEnd) {
+                return;
+            }
+
+            // If deleting before the recipient name, shift the name positions
+            if (recipientStart >= 0 && recipientEnd >= 0 && deletePos < recipientStart) {
+                m_backend->setRecipientNameStart(recipientStart - 1);
+                m_backend->setRecipientNameEnd(recipientEnd - 1);
+            }
+        }
+
         m_text.remove(m_cursorPos, 1);
         m_cursorVisible = true;
         emit textChanged();
@@ -250,6 +333,17 @@ void LetterCanvasItem::deleteChar() {
 void LetterCanvasItem::moveCursorLeft() {
     if (m_cursorPos > 0) {
         m_cursorPos--;
+
+        // Skip over recipient name in header - jump to start of name
+        if (m_backend && getSection(m_cursorPos) == 0) {
+            int recipientStart = m_backend->recipientNameStart();
+            int recipientEnd = m_backend->recipientNameEnd();
+            if (recipientStart >= 0 && recipientEnd >= 0 &&
+                m_cursorPos > recipientStart && m_cursorPos < recipientEnd) {
+                m_cursorPos = recipientStart;
+            }
+        }
+
         m_cursorVisible = true;
         emit cursorPositionChanged();
         update();
@@ -259,6 +353,17 @@ void LetterCanvasItem::moveCursorLeft() {
 void LetterCanvasItem::moveCursorRight() {
     if (m_cursorPos < m_text.length()) {
         m_cursorPos++;
+
+        // Skip over recipient name in header - jump to end of name
+        if (m_backend && getSection(m_cursorPos) == 0) {
+            int recipientStart = m_backend->recipientNameStart();
+            int recipientEnd = m_backend->recipientNameEnd();
+            if (recipientStart >= 0 && recipientEnd >= 0 &&
+                m_cursorPos > recipientStart && m_cursorPos < recipientEnd) {
+                m_cursorPos = recipientEnd;
+            }
+        }
+
         m_cursorVisible = true;
         emit cursorPositionChanged();
         update();
@@ -306,6 +411,30 @@ void LetterCanvasItem::setLetterContent(const QString& header, const QString& bo
     update();
 }
 
+int LetterCanvasItem::calculateHeaderWidth(const QString& newRecipientName) const {
+    if (!m_backend || !m_backend->isLoaded()) return 0;
+
+    QString header = getHeader();
+    int recipientStart = m_backend->recipientNameStart();
+    int recipientEnd = m_backend->recipientNameEnd();
+
+    // Calculate width of non-name characters + fixed 54px for name token
+    int totalWidth = 0;
+    const FontLoader& font = m_backend->font();
+    bool hasName = (recipientStart >= 0 && recipientEnd >= 0 && recipientEnd <= header.length());
+
+    for (int i = 0; i < header.length(); i++) {
+        // Skip recipient name chars - use fixed token width instead
+        if (hasName && i >= recipientStart && i < recipientEnd) {
+            if (i == recipientStart) totalWidth += NAME_TOKEN_WIDTH;
+            continue;
+        }
+        totalWidth += font.charWidth(header[i]) + GLYPH_SPACING;
+    }
+
+    return totalWidth;
+}
+
 void LetterCanvasItem::handleClick(qreal x, qreal y) {
     if (!m_backend || !m_backend->isLoaded()) return;
 
@@ -336,6 +465,27 @@ void LetterCanvasItem::handleClick(qreal x, qreal y) {
     if (localY >= HEADER_TOP && localY < HEADER_TOP + LINE_HEIGHT) {
         // Header
         QString header = getHeader();
+        // Check if clicked on recipient name using pixel bounds
+        int recipientStart = m_backend->recipientNameStart();
+        int recipientEnd = m_backend->recipientNameEnd();
+        if (recipientStart >= 0 && recipientEnd >= 0) {
+            // Calculate pixel bounds of recipient name
+            int nameStartX = HEADER_LEFT;
+            for (int i = 0; i < recipientStart && i < header.length(); i++) {
+                nameStartX += font.charWidth(header[i]) + GLYPH_SPACING;
+            }
+            int nameEndX = nameStartX;
+            for (int i = recipientStart; i < recipientEnd && i < header.length(); i++) {
+                nameEndX += font.charWidth(header[i]) + GLYPH_SPACING;
+            }
+
+            // Only trigger popup if click is within the name's pixel bounds
+            if (localX >= nameStartX && localX < nameEndX) {
+                emit recipientNameClicked();
+                return;
+            }
+        }
+
         int charPos = findCharPosAtX(header, localX, HEADER_LEFT, font);
         newCursorPos = charPos;
     } else if (localY >= BODY_TOP && localY < BODY_TOP + BODY_LINES * LINE_HEIGHT) {
@@ -460,14 +610,16 @@ void LetterCanvasItem::renderText(QPainter* painter) {
     int bodyStart = getBodyStartPos();
     int cursorInBody = (cursorSection == 1) ? m_cursorPos - bodyStart : -1;
 
+    bool cursorDrawn = false;
     for (int i = 0; i < BODY_LINES && i < wrappedLines.size(); i++) {
         QString lineText = wrappedLines[i].first;
         int lineStartInBody = wrappedLines[i].second;
         int lineEndInBody = lineStartInBody + lineText.length();
 
         int lineCursorCol = -1;
-        if (cursorInBody >= lineStartInBody && cursorInBody <= lineEndInBody) {
+        if (!cursorDrawn && cursorInBody >= lineStartInBody && cursorInBody <= lineEndInBody) {
             lineCursorCol = cursorInBody - lineStartInBody;
+            cursorDrawn = true;
         }
 
         renderLine(painter, lineText, BODY_LEFT, BODY_TOP + i * LINE_HEIGHT, lineCursorCol, font, false, textColor);
