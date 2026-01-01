@@ -25,70 +25,70 @@ namespace {
 
     // Default brown text (121, 97, 32), red recipient (192, 64, 64)
     static const StationeryInfo s_stationery[64] = {
-        {"Butterfly paper",   0x1000, 121, 97, 32, 192, 64, 64},  // 0x00
-        {"Airmail paper",     0x1004, 121, 97, 32, 192, 64, 64},  // 0x01
-        {"New Year's cards",  0x1008, 121, 97, 32, 192, 64, 64},  // 0x02
-        {"Lacy paper",        0x100C, 121, 97, 32, 192, 64, 64},  // 0x03
-        {"Cloudy paper",      0x1010, 121, 97, 32, 192, 64, 64},  // 0x04
-        {"Petal paper",       0x1014, 121, 97, 32, 192, 64, 64},  // 0x05
-        {"Snowy paper",       0x1018, 121, 97, 32, 192, 64, 64},  // 0x06
-        {"Maple-leaf paper",  0x101C, 121, 97, 32, 192, 64, 64},  // 0x07
-        {"Lined paper",       0x1020, 121, 97, 32, 192, 64, 64},  // 0x08
-        {"Notebook paper",    0x1024, 121, 97, 32, 192, 64, 64},  // 0x09
-        {"Flowery paper",     0x1028, 121, 97, 32, 192, 64, 64},  // 0x0A
-        {"Polka-dot paper",   0x102C, 121, 97, 32, 192, 64, 64},  // 0x0B
+        {"Butterfly paper",   0x1000,  48, 121, 130, 211,   0, 227},  // 0x00 - #307982 text, #D300E3 recipient
+        {"Airmail paper",     0x1004,  73,  97, 121,  40,  81, 243},  // 0x01 - #496179 text, #2851F3 recipient
+        {"New Year's cards",  0x1008,  73,  81,  48,   0, 146, 146},  // 0x02 - #495130 text, #009292 recipient
+        {"Lacy paper",        0x100C,  81,  81,  81, 195,   8, 178},  // 0x03 - #515151 text, #C308B2 recipient
+        {"Cloudy paper",      0x1010,  97,  97,  97,  40,  65, 251},  // 0x04 - #616161 text, #2841FB recipient
+        {"Petal paper",       0x1014,  97,  97, 105, 251,   8, 162},  // 0x05 - #616169 text, #FB08A2 recipient
+        {"Snowy paper",       0x1018,  40, 105, 113,   0, 138, 146},  // 0x06 - #286971 text, #008A92 recipient
+        {"Maple-leaf paper",  0x101C, 251, 211, 162, 251, 178,  73},  // 0x07 - #FBD3A2 text, #FBB249 recipient
+        {"Lined paper",       0x1020,  81,  81,  81,  81,  81,  81},  // 0x08 - #515151 text, #515151 recipient
+        {"Notebook paper",    0x1024, 130, 113,  81, 162, 113,  16},  // 0x09 - #827151 text, #A27110 recipient
+        {"Flowery paper",     0x1028,  65, 146, 130, 219,  89,  97},  // 0x0A - #419282 text, #DB5961 recipient
+        {"Polka-dot paper",   0x102C,  81, 105,  97, 251,  56, 178},  // 0x0B - #516961 text, #FB38B2 recipient
         {"Bottle paper",      0x1030, 121, 97, 32, 121, 97, 32},  // 0x0C - same color for recipient
-        {"Ribbon paper",      0x1034, 121, 97, 32, 192, 64, 64},  // 0x0D
-        {"Sparkly paper",     0x1038, 121, 97, 32, 192, 64, 64},  // 0x0E
-        {"Vine paper",        0x103C, 121, 97, 32, 192, 64, 64},  // 0x0F
-        {"Formal paper",      0x1040, 121, 97, 32, 192, 64, 64},  // 0x10
+        {"Ribbon paper",      0x1034, 121,  65,  48, 121,  65,  48},  // 0x0D - #794130 text, #794130 recipient
+        {"Sparkly paper",     0x1038,   0,  89, 105,  24, 113, 186},  // 0x0E - #005969 text, #1871BA recipient
+        {"Vine paper",        0x103C,   8, 121,  81,   0, 162, 113},  // 0x0F - #087951 text, #00A271 recipient
+        {"Formal paper",      0x1040, 130,  16,  32, 130,  16,  32},  // 0x10 - #821020 text, #821020 recipient
         {"Snowman paper",     0x1044, 121, 97, 32, 192, 64, 64},  // 0x11
-        {"Card paper",        0x1048, 121, 97, 32, 192, 64, 64},  // 0x12
-        {"Leopard paper",     0x104C, 121, 97, 32, 192, 64, 64},  // 0x13
-        {"Cow paper",         0x1050, 121, 97, 32, 192, 64, 64},  // 0x14
-        {"Camouflage paper",  0x1054, 121, 97, 32, 192, 64, 64},  // 0x15
-        {"Hamburger paper",   0x1058, 121, 97, 32, 192, 64, 64},  // 0x16
-        {"Piano paper",       0x105C, 121, 97, 32, 192, 64, 64},  // 0x17
-        {"Nook paper",        0x1060, 121, 97, 32, 192, 64, 64},  // 0x18
-        {"Fox paper",         0x1064, 121, 97, 32, 192, 64, 64},  // 0x19
-        {"Birthday cards",    0x1068, 121, 97, 32, 192, 64, 64},  // 0x1A
-        {"Four-leaf paper",   0x106C, 121, 97, 32, 192, 64, 64},  // 0x1B
-        {"Town-hall paper",   0x1070, 121, 97, 32, 192, 64, 64},  // 0x1C
+        {"Card paper",        0x1048,  89,  97, 105,  89,  89,  89},  // 0x12 - #596169 text, #595959 recipient
+        {"Leopard paper",     0x104C,  48,  48,  40, 113,  65,   0},  // 0x13 - #303028 text, #714100 recipient
+        {"Cow paper",         0x1050,  89,  89,  65, 243, 105, 105},  // 0x14 - #595941 text, #F36969 recipient
+        {"Camouflage paper",  0x1054, 243, 235, 178, 251, 251, 251},  // 0x15 - #F3EBB2 text, #FBFBFB recipient
+        {"Hamburger paper",   0x1058, 251,  48,   0, 251, 235,  16},  // 0x16 - #FB3000 text, #FBEB10 recipient
+        {"Piano paper",       0x105C, 211, 121, 186, 211, 121, 186},  // 0x17 - #D379BA text, #D379BA recipient
+        {"Nook paper",        0x1060, 138,  97,  56, 154,  97,  40},  // 0x18 - #8A6138 text, #9A6128 recipient
+        {"Fox paper",         0x1064,  32, 138, 121,  24, 105,  97},  // 0x19 - #208A79 text, #186961 recipient
+        {"Birthday cards",    0x1068, 105,  89,  97, 113,  97,  73},  // 0x1A - #695961 text, #716149 recipient
+        {"Four-leaf paper",   0x106C,  65,  81,   0,  73, 105,   0},  // 0x1B - #415100 text, #496900 recipient
+        {"Town-hall paper",   0x1070,  65, 113,  89,   0, 121,  24},  // 0x1C - #417159 text, #007918 recipient
         {"Tortimer paper",    0x1074,  65, 113, 89,   0, 121, 24},  // 0x1D - #417159 text, #007918 recipient
         {"Insurance paper",   0x1078, 121, 97, 32, 192, 64, 64},  // 0x1E
-        {"Academy paper",     0x107C, 121, 97, 32, 192, 64, 64},  // 0x1F
+        {"Academy paper",     0x107C, 121, 121, 113, 203, 203,  56},  // 0x1F - #797971 text, #CBCB38 recipient
         {"Lovely paper",      0x1080, 195,   0, 154, 219,   0, 113},  // 0x20 - #C3009A text, #DB0071 recipient
-        {"Rainbow paper",     0x1084, 121, 97, 32, 192, 64, 64},  // 0x21
-        {"Egyptian paper",    0x1088, 121, 97, 32, 192, 64, 64},  // 0x22
-        {"Lotus paper",       0x108C, 121, 97, 32, 192, 64, 64},  // 0x23
-        {"Tile paper",        0x1090, 121, 97, 32, 192, 64, 64},  // 0x24
-        {"Mosaic paper",      0x1094, 121, 97, 32, 192, 64, 64},  // 0x25
-        {"Elegant paper",     0x1098, 121, 97, 32, 192, 64, 64},  // 0x26
-        {"Town view paper",   0x109C, 121, 97, 32, 192, 64, 64},  // 0x27
-        {"Chinese paper",     0x10A0, 121, 97, 32, 192, 64, 64},  // 0x28
-        {"Ocean paper",       0x10A4, 121, 97, 32, 192, 64, 64},  // 0x29
-        {"Industrial paper",  0x10A8, 121, 97, 32, 192, 64, 64},  // 0x2A
-        {"Fireworks paper",   0x10AC, 121, 97, 32, 192, 64, 64},  // 0x2B
-        {"Floral paper",      0x10B0, 121, 97, 32, 192, 64, 64},  // 0x2C
-        {"Mushroom paper",    0x10B4, 121, 97, 32, 192, 64, 64},  // 0x2D
-        {"Star paper",        0x10B8, 121, 97, 32, 192, 64, 64},  // 0x2E
-        {"Composer paper",    0x10BC, 121, 97, 32, 192, 64, 64},  // 0x2F
-        {"Bathtub paper",     0x10C0, 121, 97, 32, 192, 64, 64},  // 0x30
-        {"SMB3 paper",        0x10C4, 121, 97, 32, 192, 64, 64},  // 0x31
-        {"Cool paper",        0x10C8, 121, 97, 32, 192, 64, 64},  // 0x32
-        {"Forest paper",      0x10CC, 121, 97, 32, 192, 64, 64},  // 0x33
-        {"Bubble paper",      0x10D0, 121, 97, 32, 192, 64, 64},  // 0x34
-        {"Buttercup paper",   0x10D4, 121, 97, 32, 192, 64, 64},  // 0x35
-        {"Tartan paper",      0x10D8, 121, 97, 32, 192, 64, 64},  // 0x36
-        {"Plaid paper",       0x10DC, 121, 97, 32, 192, 64, 64},  // 0x37
-        {"Lemon-lime paper",  0x10E0, 121, 97, 32, 192, 64, 64},  // 0x38
-        {"Crater paper",      0x10E4, 121, 97, 32, 192, 64, 64},  // 0x39
-        {"Bejeweled paper",   0x10E8, 121, 97, 32, 192, 64, 64},  // 0x3A
-        {"Geometric paper",   0x10EC, 121, 97, 32, 192, 64, 64},  // 0x3B
-        {"Southwest paper",   0x10F0, 121, 97, 32, 192, 64, 64},  // 0x3C
-        {"Night sky paper",   0x10F4, 121, 97, 32, 192, 64, 64},  // 0x3D
-        {"Chic paper",        0x10F8, 121, 97, 32, 192, 64, 64},  // 0x3E
-        {"Goldfish paper",    0x10FC, 121, 97, 32, 192, 64, 64},  // 0x3F
+        {"Rainbow paper",     0x1084,  97, 105,  97, 251,  65, 251},  // 0x21 - #616961 text, #FB41FB recipient
+        {"Egyptian paper",    0x1088, 146,  65,  56,  65, 138, 138},  // 0x22 - #924138 text, #418A8A recipient
+        {"Lotus paper",       0x108C,  89,  40,  32, 243,   0, 138},  // 0x23 - #592820 text, #F3008A recipient
+        {"Tile paper",        0x1090,  40,  65, 113,   0,  32, 178},  // 0x24 - #284171 text, #0020B2 recipient
+        {"Mosaic paper",      0x1094, 170,  73, 178,  89, 121,  40},  // 0x25 - #AA49B2 text, #597928 recipient
+        {"Elegant paper",     0x1098, 251, 186, 130, 251, 186, 130},  // 0x26 - #FBBA82 text, #FBBA82 recipient
+        {"Town view paper",   0x109C,  89,  89,  65, 251,  40, 178},  // 0x27 - #595941 text, #FB28B2 recipient
+        {"Chinese paper",     0x10A0, 105,  56,  56, 219,  24,   8},  // 0x28 - #693838 text, #DB1808 recipient
+        {"Ocean paper",       0x10A4, 251, 251, 251,  97, 211, 219},  // 0x29 - #FBFBFB text, #61D3DB recipient
+        {"Industrial paper",  0x10A8, 121, 113,  65, 121,  48,  48},  // 0x2A - #797141 text, #793030 recipient
+        {"Fireworks paper",   0x10AC, 243, 243, 251,   0, 251, 251},  // 0x2B - #F3F3FB text, #00FBFB recipient
+        {"Floral paper",      0x10B0,  97, 105,  56, 195,   0, 113},  // 0x2C - #616938 text, #C30071 recipient
+        {"Mushroom paper",    0x10B4, 186, 211, 235, 251, 251, 251},  // 0x2D - #BAD3EB text, #FBFBFB recipient
+        {"Star paper",        0x10B8,  40,  32,  97,  56, 146, 178},  // 0x2E - #282061 text, #3892B2 recipient
+        {"Composer paper",    0x10BC, 105,  65, 146, 105,  65, 146},  // 0x2F - #694192 text, #694192 recipient
+        {"Bathtub paper",     0x10C0,  73, 113, 130,  56,  40, 235},  // 0x30 - #497182 text, #3828EB recipient
+        {"SMB3 paper",        0x10C4,  32,  32,  65,   0,  32,  16},  // 0x31 - #202041 text, #002010 recipient
+        {"Cool paper",        0x10C8,  16, 105, 146,   0, 130, 170},  // 0x32 - #106992 text, #0082AA recipient
+        {"Forest paper",      0x10CC,  48,  73,  56,  81,  24,   0},  // 0x33 - #304938 text, #511800 recipient
+        {"Bubble paper",      0x10D0, 130,  65,  65, 130,   8,  65},  // 0x34 - #824141 text, #820841 recipient
+        {"Buttercup paper",   0x10D4,  89, 113,  89, 251, 121,  56},  // 0x35 - #597159 text, #FB7938 recipient
+        {"Tartan paper",      0x10D8, 219, 219, 251, 203, 243, 251},  // 0x36 - #DBDBFB text, #CBF3FB recipient
+        {"Plaid paper",       0x10DC, 251, 203, 203, 251, 251, 251},  // 0x37 - #FBCBCB text, #FBFBFB recipient
+        {"Lemon-lime paper",  0x10E0,   0,  73, 178,   0,  73, 178},  // 0x38 - #0049B2 text, #0049B2 recipient
+        {"Crater paper",      0x10E4,  32,  16,  73,  56,   8,  32},  // 0x39 - #201049 text, #380820 recipient
+        {"Bejeweled paper",   0x10E8, 154, 121,  65, 162,  81,  56},  // 0x3A - #9A7941 text, #A25138 recipient
+        {"Geometric paper",   0x10EC,  16,  16,  73,  48,   0,  24},  // 0x3B - #101049 text, #300018 recipient
+        {"Southwest paper",   0x10F0,  56,  56,  56,  24, 113, 121},  // 0x3C - #383838 text, #187179 recipient
+        {"Night sky paper",   0x10F4, 243, 251, 130, 243, 251, 130},  // 0x3D - #F3FB82 text, #F3FB82 recipient
+        {"Chic paper",        0x10F8, 251, 251, 146, 227, 227, 227},  // 0x3E - #FBFB92 text, #E3E3E3 recipient
+        {"Goldfish paper",    0x10FC,  73,  97, 138, 251, 105,  73},  // 0x3F - #49618A text, #FB6949 recipient
     };
 }
 

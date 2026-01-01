@@ -277,6 +277,8 @@ ApplicationWindow {
                                 { text: "Exit", shortcut: "Alt+F4", actionId: "exit" }
                             ]},
                             { title: "Edit", items: [
+                                { text: "Edit Letter Info...", actionId: "editLetterInfo", enabledWhen: "loaded" },
+                                { separator: true },
                                 { text: "Clear Letter", shortcut: "Ctrl+N", actionId: "clearLetter" }
                             ]},
                             { title: "View", items: [
@@ -397,6 +399,28 @@ ApplicationWindow {
                                                     } else if (actionId === "clearLetter") {
                                                         canvas.clearText()
                                                         paperCombo.currentIndex = 0
+                                                        // Clear letter info
+                                                        backend.recipientName = ""
+                                                        backend.recipientTown = ""
+                                                        backend.recipientPlayerId = 0
+                                                        backend.recipientTownId = 0
+                                                        backend.recipientNameStart = -1
+                                                        backend.recipientNameEnd = -1
+                                                        backend.senderName = ""
+                                                        backend.senderTown = ""
+                                                        backend.senderPlayerId = 0
+                                                        backend.senderTownId = 0
+                                                    } else if (actionId === "editLetterInfo") {
+                                                        letterInfoDialog.selectedTab = 0
+                                                        recipientTownIdField.text = backend.recipientTownId.toString()
+                                                        recipientTownField.text = backend.recipientTown
+                                                        recipientPlayerIdField.text = backend.recipientPlayerId.toString()
+                                                        recipientNameField.text = backend.recipientName
+                                                        senderTownIdField.text = backend.senderTownId.toString()
+                                                        senderTownField.text = backend.senderTown
+                                                        senderPlayerIdField.text = backend.senderPlayerId.toString()
+                                                        senderNameField.text = backend.senderName
+                                                        letterInfoDialog.open()
                                                     } else if (actionId === "nextPaper") {
                                                         if (backend.loaded && paperCombo.currentIndex < 63)
                                                             paperCombo.currentIndex++
@@ -1026,7 +1050,20 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+N"
         enabled: backend.loaded
-        onActivated: { canvas.clearText(); paperCombo.currentIndex = 0 }
+        onActivated: {
+            canvas.clearText()
+            paperCombo.currentIndex = 0
+            backend.recipientName = ""
+            backend.recipientTown = ""
+            backend.recipientPlayerId = 0
+            backend.recipientTownId = 0
+            backend.recipientNameStart = -1
+            backend.recipientNameEnd = -1
+            backend.senderName = ""
+            backend.senderTown = ""
+            backend.senderPlayerId = 0
+            backend.senderTownId = 0
+        }
     }
 
     Shortcut {
@@ -1401,13 +1438,26 @@ ApplicationWindow {
                                 if (nameChanged) {
                                     var start = backend.recipientNameStart
                                     var end = backend.recipientNameEnd
+                                    var fullText = canvas.text
+                                    var firstNewline = fullText.indexOf('\n')
+                                    var header = firstNewline >= 0 ? fullText.substring(0, firstNewline) : fullText
+                                    var rest = firstNewline >= 0 ? fullText.substring(firstNewline) : "\n\n"
+
                                     if (start >= 0 && end >= 0) {
-                                        var fullText = canvas.text
-                                        var firstNewline = fullText.indexOf('\n')
-                                        var header = firstNewline >= 0 ? fullText.substring(0, firstNewline) : fullText
-                                        var rest = firstNewline >= 0 ? fullText.substring(firstNewline) : ""
+                                        // Replace or remove existing name
                                         canvas.text = header.substring(0, start) + newName + header.substring(end) + rest
-                                        backend.recipientNameEnd = start + newName.length
+                                        if (newName.length > 0) {
+                                            backend.recipientNameEnd = start + newName.length
+                                        } else {
+                                            // Name removed - reset positions
+                                            backend.recipientNameStart = -1
+                                            backend.recipientNameEnd = -1
+                                        }
+                                    } else if (newName.length > 0) {
+                                        // First time - insert name at position 0
+                                        canvas.text = newName + header + rest
+                                        backend.recipientNameStart = 0
+                                        backend.recipientNameEnd = newName.length
                                     }
                                 }
                                 backend.recipientName = newName
@@ -1417,6 +1467,7 @@ ApplicationWindow {
                                 backend.senderPlayerId = parseInt(senderPlayerIdField.text) || 0
                                 backend.senderName = senderNameField.text
                                 letterInfoDialog.close()
+                                canvas.forceActiveFocus()
                             }
                         }
                     }
