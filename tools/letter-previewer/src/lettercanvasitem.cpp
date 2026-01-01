@@ -465,17 +465,28 @@ void LetterCanvasItem::handleClick(qreal x, qreal y) {
     if (localY >= HEADER_TOP && localY < HEADER_TOP + LINE_HEIGHT) {
         // Header
         QString header = getHeader();
-        int charPos = findCharPosAtX(header, localX, HEADER_LEFT, font);
-
-        // Check if clicked on recipient name - if so, open dialog instead of positioning cursor
+        // Check if clicked on recipient name using pixel bounds
         int recipientStart = m_backend->recipientNameStart();
         int recipientEnd = m_backend->recipientNameEnd();
-        if (recipientStart >= 0 && recipientEnd >= 0 &&
-            charPos >= recipientStart && charPos < recipientEnd) {
-            emit recipientNameClicked();
-            return;
+        if (recipientStart >= 0 && recipientEnd >= 0) {
+            // Calculate pixel bounds of recipient name
+            int nameStartX = HEADER_LEFT;
+            for (int i = 0; i < recipientStart && i < header.length(); i++) {
+                nameStartX += font.charWidth(header[i]) + GLYPH_SPACING;
+            }
+            int nameEndX = nameStartX;
+            for (int i = recipientStart; i < recipientEnd && i < header.length(); i++) {
+                nameEndX += font.charWidth(header[i]) + GLYPH_SPACING;
+            }
+
+            // Only trigger popup if click is within the name's pixel bounds
+            if (localX >= nameStartX && localX < nameEndX) {
+                emit recipientNameClicked();
+                return;
+            }
         }
 
+        int charPos = findCharPosAtX(header, localX, HEADER_LEFT, font);
         newCursorPos = charPos;
     } else if (localY >= BODY_TOP && localY < BODY_TOP + BODY_LINES * LINE_HEIGHT) {
         // Body - determine which visual line
