@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find Qt5
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui)
+find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
 
 # Enable Qt MOC, UIC, RCC
 set(CMAKE_AUTOMOC ON)
@@ -15,8 +15,8 @@ set(CMAKE_AUTOUIC ON)
 # Source files
 set(SOURCES
     src/main.cpp
-    src/mainwindow.cpp
-    src/letter_canvas.cpp
+    src/backend.cpp
+    src/lettercanvasitem.cpp
     src/stationery_loader.cpp
     src/font_loader.cpp
     src/nds_rom.cpp
@@ -24,22 +24,29 @@ set(SOURCES
 )
 
 set(HEADERS
-    src/mainwindow.h
-    src/letter_canvas.h
+    src/backend.h
+    src/lettercanvasitem.h
     src/stationery_loader.h
     src/font_loader.h
     src/nds_rom.h
     src/lz77.h
 )
 
+# Resources
+set(RESOURCES
+    resources.qrc
+)
+
 # Create executable
-add_executable(letter-previewer ${SOURCES} ${HEADERS})
+add_executable(letter-previewer ${SOURCES} ${HEADERS} ${RESOURCES})
 
 # Link Qt libraries
 target_link_libraries(letter-previewer
     Qt5::Core
-    Qt5::Widgets
     Qt5::Gui
+    Qt5::Qml
+    Qt5::Quick
+    Qt5::QuickControls2
 )
 
 # Include directories
