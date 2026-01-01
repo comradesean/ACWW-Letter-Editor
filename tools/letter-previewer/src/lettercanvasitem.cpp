@@ -103,6 +103,15 @@ void LetterCanvasItem::newLine() {
     update();
 }
 
+void LetterCanvasItem::clearText() {
+    m_text.clear();
+    m_cursorPos = 0;
+    m_cursorVisible = true;
+    emit textChanged();
+    emit cursorPositionChanged();
+    update();
+}
+
 void LetterCanvasItem::toggleCursor() {
     m_cursorVisible = !m_cursorVisible;
     emit cursorVisibleChanged();

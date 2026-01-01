@@ -35,6 +35,7 @@ public:
     Q_INVOKABLE void moveCursorLeft();
     Q_INVOKABLE void moveCursorRight();
     Q_INVOKABLE void newLine();
+    Q_INVOKABLE void clearText();
 
 signals:
     void backendChanged();

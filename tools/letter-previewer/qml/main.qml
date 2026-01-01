@@ -17,24 +17,48 @@ ApplicationWindow {
     title: "Letter Previewer"
     flags: Qt.FramelessWindowHint | Qt.Window
 
-    // Modern Color System - Cool slate palette
-    readonly property color bgBase: "#0F1117"
-    readonly property color bgSurface: "#161921"
-    readonly property color bgElevated: "#1C1F2A"
-    readonly property color bgHover: "#252936"
-    readonly property color bgActive: "#2E3344"
-    readonly property color accentPrimary: "#818CF8"
-    readonly property color accentGreen: "#34D399"
+    // Modern Color System - Ocean palette
+    readonly property color bgBase: "#0B1120"
+    readonly property color bgSurface: "#111827"
+    readonly property color bgElevated: "#1E293B"
+    readonly property color bgHover: "#2D3B4F"
+    readonly property color bgActive: "#3B4963"
+    readonly property color accentPrimary: "#38BDF8"
+    readonly property color accentGreen: "#2DD4BF"
     readonly property color textPrimary: "#F1F5F9"
     readonly property color textSecondary: "#94A3B8"
     readonly property color textMuted: "#64748B"
-    readonly property color divider: "#1E2330"
+    readonly property color divider: "#1E293B"
 
     Material.theme: Material.Dark
     Material.accent: accentPrimary
     Material.background: bgBase
 
     color: "transparent"
+
+    // Manual maximize state (more reliable for frameless windows)
+    property bool isMaximized: false
+    property rect normalGeometry: Qt.rect(100, 100, 620, 580)
+
+    function toggleMaximize() {
+        if (isMaximized) {
+            // Restore
+            window.x = normalGeometry.x
+            window.y = normalGeometry.y
+            window.width = normalGeometry.width
+            window.height = normalGeometry.height
+            isMaximized = false
+        } else {
+            // Save current geometry and maximize to current screen only
+            normalGeometry = Qt.rect(window.x, window.y, window.width, window.height)
+            var screen = window.screen
+            window.x = screen.virtualX
+            window.y = screen.virtualY
+            window.width = screen.width
+            window.height = screen.height
+            isMaximized = true
+        }
+    }
 
     Backend {
         id: backend
@@ -44,18 +68,22 @@ ApplicationWindow {
     Rectangle {
         id: mainContainer
         anchors.fill: parent
-        anchors.margins: 1
-        radius: 12
+        anchors.margins: isMaximized ? 0 : 1
+        radius: isMaximized ? 0 : 12
         color: bgBase
         clip: true
 
-        // Subtle border
+        Behavior on anchors.margins { NumberAnimation { duration: 100 } }
+        Behavior on radius { NumberAnimation { duration: 100 } }
+
+        // Subtle border (hidden when maximized)
         Rectangle {
             anchors.fill: parent
-            radius: 12
+            radius: parent.radius
             color: "transparent"
             border.color: Qt.rgba(255, 255, 255, 0.06)
-            border.width: 1
+            border.width: isMaximized ? 0 : 1
+            visible: !isMaximized
         }
 
         ColumnLayout {
@@ -68,7 +96,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 40
                 color: bgSurface
-                radius: 12
+                radius: isMaximized ? 0 : 12
 
                 // Square off bottom corners
                 Rectangle {
@@ -76,13 +104,14 @@ ApplicationWindow {
                     width: parent.width
                     height: 12
                     color: bgSurface
+                    visible: !isMaximized
                 }
 
-                // Drag area
+                // Drag area (behind the controls)
                 MouseArea {
                     id: titleBarDrag
                     anchors.fill: parent
-                    anchors.rightMargin: windowControls.width + 8
+                    z: 0
                     property point clickPos
 
                     onPressed: {
@@ -90,20 +119,14 @@ ApplicationWindow {
                     }
 
                     onPositionChanged: {
-                        if (pressed) {
+                        if (pressed && !isMaximized) {
                             var delta = Qt.point(mouse.x - clickPos.x, mouse.y - clickPos.y)
                             window.x += delta.x
                             window.y += delta.y
                         }
                     }
 
-                    onDoubleClicked: {
-                        if (window.visibility === Window.Maximized) {
-                            window.showNormal()
-                        } else {
-                            window.showMaximized()
-                        }
-                    }
+                    onDoubleClicked: toggleMaximize()
                 }
 
                 RowLayout {
@@ -111,6 +134,7 @@ ApplicationWindow {
                     anchors.leftMargin: 14
                     anchors.rightMargin: 8
                     spacing: 10
+                    z: 1
 
                     // App icon
                     Rectangle {
@@ -141,6 +165,7 @@ ApplicationWindow {
                     Row {
                         id: windowControls
                         spacing: 2
+                        z: 10
 
                         // Minimize
                         Rectangle {
@@ -178,7 +203,7 @@ ApplicationWindow {
 
                             Text {
                                 anchors.centerIn: parent
-                                text: window.visibility === Window.Maximized ? "❐" : "□"
+                                text: isMaximized ? "❐" : "□"
                                 font.pixelSize: 11
                                 color: textSecondary
                             }
@@ -188,11 +213,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: {
-                                    if (window.visibility === Window.Maximized) {
-                                        window.showNormal()
-                                    } else {
-                                        window.showMaximized()
-                                    }
+                                    toggleMaximize()
                                 }
                             }
                         }
@@ -247,16 +268,16 @@ ApplicationWindow {
                     Repeater {
                         model: [
                             { title: "File", items: [
-                                { text: "Open ROM...", shortcut: "Ctrl+O", action: function() { fileDialog.open() } },
+                                { text: "Open ROM...", shortcut: "Ctrl+O", actionId: "openRom", disabledWhen: "loaded" },
                                 { separator: true },
-                                { text: "Exit", shortcut: "Alt+F4", action: function() { Qt.quit() } }
+                                { text: "Exit", shortcut: "Alt+F4", actionId: "exit" }
                             ]},
                             { title: "Edit", items: [
-                                { text: "Clear Letter", shortcut: "", enabled: backend.loaded, action: function() { canvas.clearText() } }
+                                { text: "Clear Letter", shortcut: "Ctrl+N", actionId: "clearLetter" }
                             ]},
                             { title: "View", items: [
-                                { text: "Next Paper", shortcut: "Ctrl+]", enabled: backend.loaded && paperCombo.currentIndex < 63, action: function() { paperCombo.currentIndex++ } },
-                                { text: "Previous Paper", shortcut: "Ctrl+[", enabled: backend.loaded && paperCombo.currentIndex > 0, action: function() { paperCombo.currentIndex-- } }
+                                { text: "Next Paper", shortcut: "Ctrl+]", actionId: "nextPaper" },
+                                { text: "Previous Paper", shortcut: "Ctrl+[", actionId: "prevPaper" }
                             ]}
                         ]
 
@@ -288,23 +309,15 @@ ApplicationWindow {
                                 y: parent.height + 4
                                 x: 0
                                 padding: 6
-                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                                modal: false
+                                focus: true
 
                                 background: Rectangle {
                                     color: bgElevated
                                     radius: 10
                                     border.color: divider
                                     border.width: 1
-
-                                    layer.enabled: true
-                                    layer.effect: DropShadow {
-                                        transparentBorder: true
-                                        horizontalOffset: 0
-                                        verticalOffset: 8
-                                        radius: 24
-                                        samples: 49
-                                        color: "#50000000"
-                                    }
                                 }
 
                                 contentItem: Column {
@@ -313,66 +326,74 @@ ApplicationWindow {
                                     Repeater {
                                         model: modelData.items
 
-                                        Loader {
-                                            sourceComponent: modelData.separator ? separatorComponent : menuItemComponent
+                                        Rectangle {
+                                            property bool isSeparator: modelData.separator === true
+                                            property bool isDisabled: modelData.disabledWhen === "loaded" && backend.loaded
 
-                                            Component {
-                                                id: separatorComponent
-                                                Rectangle {
-                                                    width: 160
-                                                    height: 9
-                                                    color: "transparent"
-                                                    Rectangle {
-                                                        anchors.centerIn: parent
-                                                        width: parent.width - 12
-                                                        height: 1
-                                                        color: divider
-                                                    }
+                                            width: 160
+                                            height: isSeparator ? 9 : 32
+                                            radius: isSeparator ? 0 : 6
+                                            color: (!isSeparator && !isDisabled && itemMouseArea.containsMouse) ? bgHover : "transparent"
+
+                                            Behavior on color { ColorAnimation { duration: 80 } }
+
+                                            // Separator line
+                                            Rectangle {
+                                                visible: isSeparator
+                                                anchors.centerIn: parent
+                                                width: parent.width - 12
+                                                height: 1
+                                                color: divider
+                                            }
+
+                                            // Menu item content
+                                            RowLayout {
+                                                visible: !isSeparator
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                spacing: 8
+
+                                                Text {
+                                                    text: modelData.text || ""
+                                                    font.pixelSize: 12
+                                                    color: isDisabled ? textMuted : (itemMouseArea.containsMouse ? textPrimary : textSecondary)
+                                                    Layout.fillWidth: true
+                                                }
+
+                                                Text {
+                                                    text: modelData.shortcut || ""
+                                                    font.pixelSize: 11
+                                                    color: textMuted
+                                                    visible: text !== ""
+                                                    opacity: isDisabled ? 0.5 : 1
                                                 }
                                             }
 
-                                            Component {
-                                                id: menuItemComponent
-                                                Rectangle {
-                                                    width: 160
-                                                    height: 32
-                                                    radius: 6
-                                                    color: itemArea.containsMouse && (modelData.enabled !== false) ? bgHover : "transparent"
+                                            MouseArea {
+                                                id: itemMouseArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                visible: !isSeparator
+                                                enabled: !isDisabled
 
-                                                    Behavior on color { ColorAnimation { duration: 80 } }
-
-                                                    RowLayout {
-                                                        anchors.fill: parent
-                                                        anchors.leftMargin: 10
-                                                        anchors.rightMargin: 10
-                                                        spacing: 8
-
-                                                        Text {
-                                                            text: modelData.text
-                                                            font.pixelSize: 12
-                                                            color: modelData.enabled !== false ? (itemArea.containsMouse ? textPrimary : textSecondary) : textMuted
-                                                            Layout.fillWidth: true
-                                                        }
-
-                                                        Text {
-                                                            text: modelData.shortcut || ""
-                                                            font.pixelSize: 11
-                                                            color: textMuted
-                                                            visible: text !== ""
-                                                        }
+                                                onClicked: {
+                                                    var actionId = modelData.actionId
+                                                    if (actionId === "openRom") {
+                                                        fileDialog.open()
+                                                    } else if (actionId === "exit") {
+                                                        Qt.quit()
+                                                    } else if (actionId === "clearLetter") {
+                                                        canvas.clearText()
+                                                        paperCombo.currentIndex = 0
+                                                    } else if (actionId === "nextPaper") {
+                                                        if (backend.loaded && paperCombo.currentIndex < 63)
+                                                            paperCombo.currentIndex++
+                                                    } else if (actionId === "prevPaper") {
+                                                        if (backend.loaded && paperCombo.currentIndex > 0)
+                                                            paperCombo.currentIndex--
                                                     }
-
-                                                    MouseArea {
-                                                        id: itemArea
-                                                        anchors.fill: parent
-                                                        hoverEnabled: true
-                                                        onClicked: {
-                                                            if (modelData.enabled !== false && modelData.action) {
-                                                                modelData.action()
-                                                                menuPopup.close()
-                                                            }
-                                                        }
-                                                    }
+                                                    menuPopup.close()
                                                 }
                                             }
                                         }
@@ -642,13 +663,14 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 36
                 color: bgSurface
-                radius: 12
+                radius: isMaximized ? 0 : 12
 
                 // Square off top corners
                 Rectangle {
                     width: parent.width
                     height: 12
                     color: bgSurface
+                    visible: !isMaximized
                 }
 
                 Rectangle {
@@ -681,9 +703,10 @@ ApplicationWindow {
         }
     }
 
-    // Resize handles
+    // Resize handles (hidden when maximized)
     MouseArea {
         id: resizeLeft
+        visible: !isMaximized
         width: 5
         anchors.left: parent.left
         anchors.top: parent.top
@@ -707,6 +730,7 @@ ApplicationWindow {
 
     MouseArea {
         id: resizeRight
+        visible: !isMaximized
         width: 5
         anchors.right: parent.right
         anchors.top: parent.top
@@ -729,6 +753,7 @@ ApplicationWindow {
 
     MouseArea {
         id: resizeBottom
+        visible: !isMaximized
         height: 5
         anchors.left: parent.left
         anchors.right: parent.right
@@ -751,6 +776,7 @@ ApplicationWindow {
 
     MouseArea {
         id: resizeCorner
+        visible: !isMaximized
         width: 12
         height: 12
         anchors.right: parent.right
@@ -776,8 +802,8 @@ ApplicationWindow {
     // Welcome overlay
     Rectangle {
         anchors.fill: mainContainer
-        anchors.margins: 1
-        radius: 12
+        anchors.margins: isMaximized ? 0 : 1
+        radius: isMaximized ? 0 : 12
         color: Qt.rgba(bgBase.r, bgBase.g, bgBase.b, 0.94)
         visible: !backend.loaded
 
@@ -866,7 +892,14 @@ ApplicationWindow {
     // Keyboard shortcuts
     Shortcut {
         sequence: "Ctrl+O"
+        enabled: !backend.loaded
         onActivated: fileDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+N"
+        enabled: backend.loaded
+        onActivated: { canvas.clearText(); paperCombo.currentIndex = 0 }
     }
 
     Shortcut {
@@ -894,8 +927,16 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        if (!backend.loaded) {
-            fileDialog.open()
+        // Try to find ROM in executable directory first
+        var localRom = backend.findLocalRom()
+        if (localRom !== "") {
+            backend.loadRom(Qt.resolvedUrl("file://" + localRom))
+            if (backend.loaded) {
+                canvas.forceActiveFocus()
+                return
+            }
         }
+        // No local ROM found, show file dialog
+        fileDialog.open()
     }
 }

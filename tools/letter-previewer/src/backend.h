@@ -28,6 +28,7 @@ public:
 
     Q_INVOKABLE bool loadRom(const QUrl& fileUrl);
     Q_INVOKABLE QImage getPaperImage(int index) const;
+    Q_INVOKABLE QString findLocalRom() const;
 
     // For canvas rendering
     const StationeryLoader& stationery() const { return m_stationery; }
