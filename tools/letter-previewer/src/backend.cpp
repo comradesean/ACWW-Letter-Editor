@@ -1,8 +1,10 @@
 #include "backend.h"
+#include "letterconstants.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QDebug>
+#include <QPainter>
 
 // CRC32 lookup table (standard polynomial 0xEDB88320)
 static const uint32_t crc32_table[256] = {
@@ -49,6 +51,94 @@ static uint32_t calculateCRC32(const QByteArray& data) {
     return crc ^ 0xFFFFFFFF;
 }
 
+// ACWW Western character encoding table (256 entries)
+// Maps byte values 0x00-0xFF to Unicode characters
+static const char* acwwCharTable[256] = {
+    "\0", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",        // 0x00-0x0F
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e",         // 0x10-0x1F
+    "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",         // 0x20-0x2F
+    "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "f",         // 0x30-0x3F
+    "s", "O", "Z", "s", "o", "z", "Y", "A", "A", "A", "A", "A", "A", "A", "C", "E",         // 0x40-0x4F (accented)
+    "E", "E", "E", "I", "I", "I", "I", "D", "N", "O", "O", "O", "O", "O", "O", "U",         // 0x50-0x5F
+    "U", "U", "U", "Y", "T", "s", "a", "a", "a", "a", "a", "a", "a", "c", "e", "e",         // 0x60-0x6F
+    "e", "e", "i", "i", "i", "i", "d", "n", "o", "o", "o", "o", "o", "o", "u", "u",         // 0x70-0x7F
+    "u", "u", "y", "t", "y", " ", "\n", "!", "\"", "#", "$", "%", "&", "'", "(", ")",       // 0x80-0x8F
+    "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "{", "]",         // 0x90-0x9F
+    "|", "_", "}", ",", ".", ".", "~", "L", "+", "+", "^", "%", "<", "`", "\"", "*",        // 0xA0-0xAF
+    "-", "'", "-", "\"", "T", ">", " ", "~", "Y", "|", "S", "!", "c", "L", " ", "c",        // 0xB0-0xBF
+    "a", "<", "-", "-", "R", "o", "+", "2", "3", "-", "s", "P", ">", "1", "o",              // 0xC0-0xCE
+    ">", ".", "1", "1", "3", " ", " ", " ", " ", "?", "x", "/", " ", "*", " ", " ",         // 0xCF-0xDF (special chars)
+    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",         // 0xE0-0xEF
+    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " "          // 0xF0-0xFF
+};
+
+// LTR file format constants (EUR/USA)
+static const int LTR_FILE_SIZE = 0xF4;        // 244 bytes
+
+// Receiver (To) field - 0x00-0x13 (20 bytes)
+static const int LTR_TO_TOWN_OFFSET = 0x02;   // 8 bytes (town name)
+static const int LTR_TO_NAME_OFFSET = 0x0C;   // 8 bytes (player name)
+
+// Sender (From) field - 0x18-0x2B (20 bytes)
+static const int LTR_FROM_TOWN_OFFSET = 0x1A; // 8 bytes (town name)
+static const int LTR_FROM_NAME_OFFSET = 0x24; // 8 bytes (player name)
+
+// Letter content
+static const int LTR_SUBJECT_OFFSET = 0x30;   // Greeting/subject template
+static const int LTR_SUBJECT_SIZE = 0x10;     // 16 bytes
+static const int LTR_BODY_OFFSET = 0x48;      // Letter body
+static const int LTR_BODY_SIZE = 0x64;        // 100 bytes
+static const int LTR_SIGNATURE_OFFSET = 0xC8; // Signature/ending
+static const int LTR_SIGNATURE_SIZE = 0x1A;   // 26 bytes
+
+// Metadata
+static const int LTR_NAME_POS_OFFSET = 0xE8;  // 1 byte - position to insert name in greeting
+static const int LTR_PAPER_OFFSET = 0xE9;     // 1 byte
+
+// Decode ACWW bytes to QString
+static QString decodeAcwwText(const QByteArray& data) {
+    QString result;
+    for (int i = 0; i < data.size(); i++) {
+        uint8_t byte = static_cast<uint8_t>(data[i]);
+        if (byte == 0) {
+            // Null byte - could be end of string or space
+            continue;
+        }
+        result += QString::fromUtf8(acwwCharTable[byte]);
+    }
+    return result.trimmed();
+}
+
+// Encode QString to ACWW bytes
+static QByteArray encodeAcwwText(const QString& text, int maxLen) {
+    QByteArray result(maxLen, 0);
+    int pos = 0;
+
+    for (int i = 0; i < text.length() && pos < maxLen; i++) {
+        QChar ch = text[i];
+        uint8_t encoded = 0x85; // Default to space
+
+        // Find the character in the encoding table
+        if (ch == '\n') {
+            encoded = 0x86; // Newline
+        } else if (ch == ' ') {
+            encoded = 0x85; // Space
+        } else {
+            // Search for matching character
+            for (int j = 1; j < 256; j++) {
+                if (QString::fromUtf8(acwwCharTable[j]) == QString(ch)) {
+                    encoded = static_cast<uint8_t>(j);
+                    break;
+                }
+            }
+        }
+
+        result[pos++] = static_cast<char>(encoded);
+    }
+
+    return result;
+}
+
 Backend::Backend(QObject* parent)
     : QObject(parent)
 {
@@ -70,10 +160,10 @@ bool Backend::loadRom(const QUrl& fileUrl) {
         return false;
     }
 
-    // Build paper names list
+    // Build paper names list using actual stationery names
     m_paperNames.clear();
     for (int i = 0; i < m_stationery.count(); i++) {
-        m_paperNames.append(QString("Paper %1").arg(i, 2, 10, QChar('0')));
+        m_paperNames.append(m_stationery.getName(i));
     }
 
     m_loaded = true;
@@ -172,4 +262,331 @@ QString Backend::findLocalRom() const {
     }
 
     return QString();
+}
+
+bool Backend::importLtr(const QUrl& fileUrl) {
+    QString path = fileUrl.toLocalFile();
+    QFile file(path);
+
+    if (!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "Failed to open LTR file:" << path;
+        return false;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    if (data.size() != LTR_FILE_SIZE) {
+        qDebug() << "Invalid LTR file size:" << data.size() << "expected:" << LTR_FILE_SIZE;
+        return false;
+    }
+
+    // Extract recipient name and town from To field
+    QByteArray toNameBytes = data.mid(LTR_TO_NAME_OFFSET, 8);
+    QString recipientName = decodeAcwwText(toNameBytes);
+    QByteArray toTownBytes = data.mid(LTR_TO_TOWN_OFFSET, 8);
+    QString recipientTown = decodeAcwwText(toTownBytes);
+
+    // Extract sender name and town from From field
+    QByteArray fromNameBytes = data.mid(LTR_FROM_NAME_OFFSET, 8);
+    QString senderName = decodeAcwwText(fromNameBytes);
+    QByteArray fromTownBytes = data.mid(LTR_FROM_TOWN_OFFSET, 8);
+    QString senderTown = decodeAcwwText(fromTownBytes);
+
+    // Extract subject/greeting template
+    QByteArray subjectBytes = data.mid(LTR_SUBJECT_OFFSET, LTR_SUBJECT_SIZE);
+    QString subjectTemplate = decodeAcwwText(subjectBytes);
+
+    // Get name insertion position
+    int namePos = static_cast<uint8_t>(data[LTR_NAME_POS_OFFSET]);
+
+    // Insert recipient name into greeting at the specified position
+    QString subject;
+    int recipientStart = -1;
+    int recipientEnd = -1;
+    if (namePos > 0 && namePos <= subjectTemplate.length() && !recipientName.isEmpty()) {
+        subject = subjectTemplate.left(namePos) + recipientName + subjectTemplate.mid(namePos);
+        recipientStart = namePos;
+        recipientEnd = namePos + recipientName.length();
+    } else {
+        subject = subjectTemplate;
+    }
+
+    // Extract body bytes (99 bytes total)
+    QByteArray bodyBytes = data.mid(LTR_BODY_OFFSET, LTR_BODY_SIZE);
+
+    // Decode body - preserve exactly as stored (including spacing and newlines)
+    QString body = decodeAcwwText(bodyBytes);
+
+    // Extract signature
+    QByteArray sigBytes = data.mid(LTR_SIGNATURE_OFFSET, LTR_SIGNATURE_SIZE);
+    QString signature = decodeAcwwText(sigBytes);
+
+    // Extract paper ID
+    int paperId = static_cast<uint8_t>(data[LTR_PAPER_OFFSET]);
+    if (paperId < 0 || paperId > 63) {
+        paperId = 0;
+    }
+
+    // Store the separate sections for use by canvas.setLetterContent()
+    m_letterHeader = subject;
+    m_letterBody = body;
+    m_letterFooter = signature;
+
+    // Build the combined letter text
+    QString letterText = subject + "\n" + body + "\n" + signature;
+
+    // Update state
+    m_recipientName = recipientName;
+    m_recipientTown = recipientTown;
+    m_senderName = senderName;
+    m_senderTown = senderTown;
+    m_recipientNameStart = recipientStart;
+    m_recipientNameEnd = recipientEnd;
+    setLetterText(letterText);
+    setCurrentPaper(paperId);
+
+    qDebug() << "Imported LTR file:" << path;
+    qDebug() << "Paper ID:" << paperId;
+    qDebug() << "Recipient:" << recipientName << "from" << recipientTown;
+    qDebug() << "Sender:" << senderName << "from" << senderTown;
+    qDebug() << "Subject template:" << subjectTemplate;
+    qDebug() << "Subject (with name):" << subject;
+    qDebug() << "Body:" << body;
+    qDebug() << "Signature:" << signature;
+
+    return true;
+}
+
+bool Backend::exportLtr(const QUrl& fileUrl) const {
+    QString path = fileUrl.toLocalFile();
+
+    // Parse new format: header\nbody\nfooter
+    int firstNewline = m_letterText.indexOf('\n');
+    int lastNewline = m_letterText.lastIndexOf('\n');
+
+    QString subject, body, signature;
+    if (firstNewline < 0) {
+        // No newlines - all header
+        subject = m_letterText;
+    } else if (firstNewline == lastNewline) {
+        // One newline - header and body only
+        subject = m_letterText.left(firstNewline);
+        body = m_letterText.mid(firstNewline + 1);
+    } else {
+        // Two+ newlines - header, body, footer
+        subject = m_letterText.left(firstNewline);
+        body = m_letterText.mid(firstNewline + 1, lastNewline - firstNewline - 1);
+        signature = m_letterText.mid(lastNewline + 1);
+    }
+
+    // Remove any newlines from body for export (they become 0x86 via encoding)
+    // Body newlines are preserved as they map to 0x86 in encodeAcwwText
+
+    // Create LTR file buffer (244 bytes, all zeros initially)
+    QByteArray data(LTR_FILE_SIZE, 0);
+
+    // Encode and write subject
+    QByteArray subjectEncoded = encodeAcwwText(subject, LTR_SUBJECT_SIZE);
+    for (int i = 0; i < LTR_SUBJECT_SIZE; i++) {
+        data[LTR_SUBJECT_OFFSET + i] = subjectEncoded[i];
+    }
+
+    // Encode and write body
+    QByteArray bodyEncoded = encodeAcwwText(body, LTR_BODY_SIZE);
+    for (int i = 0; i < LTR_BODY_SIZE; i++) {
+        data[LTR_BODY_OFFSET + i] = bodyEncoded[i];
+    }
+
+    // Encode and write signature
+    QByteArray sigEncoded = encodeAcwwText(signature, LTR_SIGNATURE_SIZE);
+    for (int i = 0; i < LTR_SIGNATURE_SIZE; i++) {
+        data[LTR_SIGNATURE_OFFSET + i] = sigEncoded[i];
+    }
+
+    // Write paper ID
+    data[LTR_PAPER_OFFSET] = static_cast<char>(m_currentPaper & 0x3F);
+
+    // Write file
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        qDebug() << "Failed to create LTR file:" << path;
+        return false;
+    }
+
+    file.write(data);
+    file.close();
+
+    qDebug() << "Exported LTR file:" << path;
+    return true;
+}
+
+bool Backend::exportPng(const QUrl& fileUrl, int scale) const {
+    QString path = fileUrl.toLocalFile();
+
+    if (!m_loaded) {
+        qDebug() << "Cannot export PNG: ROM not loaded";
+        return false;
+    }
+
+    // Ensure scale is reasonable
+    if (scale < 1) scale = 1;
+    if (scale > 4) scale = 4;
+
+    // Create image at scaled resolution
+    int width = 256 * scale;
+    int height = 192 * scale;
+    QImage image(width, height, QImage::Format_ARGB32);
+    image.fill(Qt::transparent);
+
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+
+    // Draw background
+    QImage bg = m_stationery.getPaper(m_currentPaper);
+    if (!bg.isNull()) {
+        painter.drawImage(QRect(0, 0, width, height), bg);
+    }
+
+    // Get colors for current stationery
+    QColor textColor = m_stationery.getTextColor(m_currentPaper);
+    QColor recipientColor = m_stationery.getRecipientColor(m_currentPaper);
+
+    // Parse text sections
+    int firstNewline = m_letterText.indexOf('\n');
+    int lastNewline = m_letterText.lastIndexOf('\n');
+
+    QString header, body, footer;
+    if (firstNewline < 0) {
+        header = m_letterText;
+    } else if (firstNewline == lastNewline) {
+        header = m_letterText.left(firstNewline);
+        body = m_letterText.mid(firstNewline + 1);
+    } else {
+        header = m_letterText.left(firstNewline);
+        body = m_letterText.mid(firstNewline + 1, lastNewline - firstNewline - 1);
+        footer = m_letterText.mid(lastNewline + 1);
+    }
+
+    // Layout constants (scaled)
+    const int headerLeft = 48 * scale;
+    const int headerTop = 40 * scale;
+    const int bodyLeft = 48 * scale;
+    const int bodyTop = 64 * scale;
+    const int footerRight = 208 * scale;
+    const int footerTop = 136 * scale;
+    const int lineHeight = 16 * scale;
+    const int glyphSpacing = 1 * scale;
+    const int maxLineWidth = 150 * scale;
+
+    // Helper lambda to draw text
+    auto drawText = [&](const QString& text, int x, int y, const QColor& color, bool rightAlign = false) {
+        int drawX = x;
+
+        if (rightAlign) {
+            int totalWidth = 0;
+            for (const QChar& ch : text) {
+                totalWidth += (m_font.charWidth(ch) + 1) * scale;
+            }
+            drawX = x - totalWidth;
+        }
+
+        for (int i = 0; i < text.length(); i++) {
+            QChar ch = text[i];
+            QImage glyph = m_font.getColoredGlyph(ch, color);
+
+            if (!glyph.isNull()) {
+                // Scale the glyph
+                QImage scaledGlyph = glyph.scaled(16 * scale, 16 * scale, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+                painter.drawImage(drawX, y, scaledGlyph);
+                drawX += (m_font.charWidth(ch) + 1) * scale;
+            } else {
+                drawX += (m_font.charWidth(ch) + 1) * scale;
+            }
+        }
+    };
+
+    // Helper lambda to draw header with recipient coloring
+    auto drawHeader = [&](const QString& text, int x, int y) {
+        int drawX = x;
+
+        for (int i = 0; i < text.length(); i++) {
+            QChar ch = text[i];
+
+            // Determine color - use recipient color if within recipient name range
+            QColor color = textColor;
+            if (m_recipientNameStart >= 0 && m_recipientNameEnd >= 0 &&
+                i >= m_recipientNameStart && i < m_recipientNameEnd) {
+                color = recipientColor;
+            }
+
+            QImage glyph = m_font.getColoredGlyph(ch, color);
+
+            if (!glyph.isNull()) {
+                QImage scaledGlyph = glyph.scaled(16 * scale, 16 * scale, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+                painter.drawImage(drawX, y, scaledGlyph);
+                drawX += (m_font.charWidth(ch) + 1) * scale;
+            } else {
+                drawX += (m_font.charWidth(ch) + 1) * scale;
+            }
+        }
+    };
+
+    // Draw header with recipient coloring
+    drawHeader(header, headerLeft, headerTop);
+
+    // Draw body with word wrapping
+    int bodyLine = 0;
+    int pos = 0;
+    while (bodyLine < 4 && pos < body.length()) {
+        QString lineText;
+        int lineWidth = 0;
+        int lastSpacePos = -1;
+        int lastSpaceBodyPos = -1;
+
+        while (pos < body.length()) {
+            QChar ch = body[pos];
+
+            if (ch == '\n') {
+                pos++;
+                break;
+            }
+
+            int charWidth = (m_font.charWidth(ch) + 1) * scale;
+
+            if (lineWidth + charWidth > maxLineWidth && !lineText.isEmpty()) {
+                if (lastSpacePos > 0) {
+                    lineText = lineText.left(lastSpacePos - 1);
+                    pos = lastSpaceBodyPos;
+                }
+                break;
+            }
+
+            lineText += ch;
+            lineWidth += charWidth;
+            pos++;
+
+            if (ch == ' ') {
+                lastSpacePos = lineText.length();
+                lastSpaceBodyPos = pos;
+            }
+        }
+
+        drawText(lineText, bodyLeft, bodyTop + bodyLine * lineHeight, textColor);
+        bodyLine++;
+    }
+
+    // Draw footer (right-aligned)
+    drawText(footer, footerRight, footerTop, textColor, true);
+
+    painter.end();
+
+    // Save as PNG
+    if (!image.save(path, "PNG")) {
+        qDebug() << "Failed to save PNG:" << path;
+        return false;
+    }
+
+    qDebug() << "Exported PNG:" << path << "at" << scale << "x scale";
+    return true;
 }

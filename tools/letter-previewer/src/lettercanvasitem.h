@@ -3,8 +3,12 @@
 #include <QImage>
 #include <QString>
 #include <QTimer>
+#include <QVector>
+#include <QPair>
+#include "letterconstants.h"
 
 class Backend;
+class FontLoader;
 
 class LetterCanvasItem : public QQuickPaintedItem {
     Q_OBJECT
@@ -36,6 +40,8 @@ public:
     Q_INVOKABLE void moveCursorRight();
     Q_INVOKABLE void newLine();
     Q_INVOKABLE void clearText();
+    Q_INVOKABLE void handleClick(qreal x, qreal y);
+    Q_INVOKABLE void setLetterContent(const QString& header, const QString& body, const QString& footer);
 
 signals:
     void backendChanged();
@@ -49,6 +55,27 @@ private slots:
 
 private:
     void renderText(QPainter* painter);
+    void renderLine(QPainter* painter, const QString& text, int x, int y,
+                    int cursorCol, const FontLoader& font, bool rightAlign,
+                    const QColor& textColor);
+    void renderLineWithRecipient(QPainter* painter, const QString& text, int x, int y,
+                                  int cursorCol, const FontLoader& font,
+                                  const QColor& textColor, const QColor& recipientColor,
+                                  int recipientStart, int recipientEnd);
+
+    // Text structure helpers (text = "header\nbody\nfooter")
+    int getSection(int pos) const;  // 0=header, 1=body, 2=footer
+    int getBodyStartPos() const;
+    int getFooterStartPos() const;
+    QString getHeader() const;
+    QString getBody() const;
+    QString getFooter() const;
+
+    // Body wrapping - returns (lineText, startPosInBody) pairs
+    QVector<QPair<QString, int>> wrapBodyText() const;
+
+    // Click handling helper
+    int findCharPosAtX(const QString& text, int targetX, int startX, const FontLoader& font) const;
 
     Backend* m_backend = nullptr;
     QString m_text;
@@ -56,14 +83,18 @@ private:
     bool m_cursorVisible = true;
     QTimer m_cursorTimer;
 
-    // Layout constants (in 1x coordinates)
-    static constexpr int HEADER_LEFT = 48;
-    static constexpr int HEADER_TOP = 40;
-    static constexpr int BODY_LEFT = 48;
-    static constexpr int BODY_TOP = 64;
-    static constexpr int BODY_LINES = 4;
-    static constexpr int FOOTER_RIGHT = 208;
-    static constexpr int FOOTER_TOP = 136;
-    static constexpr int LINE_HEIGHT = 16;
-    static constexpr int GLYPH_SPACING = 1;
+    // Use shared constants from letterconstants.h
+    static constexpr int HEADER_LEFT = LetterConstants::HEADER_LEFT;
+    static constexpr int HEADER_TOP = LetterConstants::HEADER_TOP;
+    static constexpr int BODY_LEFT = LetterConstants::BODY_LEFT;
+    static constexpr int BODY_TOP = LetterConstants::BODY_TOP;
+    static constexpr int BODY_LINES = LetterConstants::BODY_LINES;
+    static constexpr int FOOTER_RIGHT = LetterConstants::FOOTER_RIGHT;
+    static constexpr int FOOTER_TOP = LetterConstants::FOOTER_TOP;
+    static constexpr int LINE_HEIGHT = LetterConstants::LINE_HEIGHT;
+    static constexpr int GLYPH_SPACING = LetterConstants::GLYPH_SPACING;
+    static constexpr int MAX_LINE_WIDTH = LetterConstants::MAX_LINE_WIDTH;
+    static constexpr int MAX_HEADER_CHARS = LetterConstants::MAX_HEADER_CHARS;
+    static constexpr int MAX_BODY_CHARS = LetterConstants::MAX_BODY_CHARS;
+    static constexpr int MAX_FOOTER_CHARS = LetterConstants::MAX_FOOTER_CHARS;
 };

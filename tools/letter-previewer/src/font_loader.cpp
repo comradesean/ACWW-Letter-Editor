@@ -46,10 +46,10 @@ bool FontLoader::loadFontA(NDSRom& rom) {
         int glyphDataOffset = g * bytesPerGlyph;
         if (glyphDataOffset + bytesPerGlyph > static_cast<int>(m_imgData.size())) continue;
 
-        QImage glyphImg(GLYPH_WIDTH, GLYPH_HEIGHT, QImage::Format_ARGB32);
-        glyphImg.fill(Qt::transparent);
+        QImage glyphMask(GLYPH_WIDTH, GLYPH_HEIGHT, QImage::Format_ARGB32);
+        glyphMask.fill(Qt::transparent);
 
-        // Decode 1bpp glyph (MSB first, row-major)
+        // Decode 1bpp glyph (MSB first, row-major) - store as white mask
         for (int py = 0; py < GLYPH_HEIGHT; py++) {
             for (int px = 0; px < GLYPH_WIDTH; px++) {
                 int bitIdx = py * GLYPH_WIDTH + px;
@@ -60,7 +60,7 @@ bool FontLoader::loadFontA(NDSRom& rom) {
                 uint8_t bit = (byte >> bitOffset) & 1;
 
                 if (bit) {
-                    glyphImg.setPixelColor(px, py, QColor(121, 97, 32, 255));  // Brown text
+                    glyphMask.setPixelColor(px, py, QColor(255, 255, 255, 255));  // White mask
                 }
             }
         }
@@ -68,7 +68,7 @@ bool FontLoader::loadFontA(NDSRom& rom) {
         GlyphInfo info;
         info.index = g;
         info.displayWidth = m_charWidths[g];
-        info.bitmap = glyphImg;
+        info.mask = glyphMask;
 
         m_glyphs[m_charCodes[g]] = info;
     }
@@ -118,4 +118,25 @@ int FontLoader::charWidth(QChar ch) const {
         return glyph->displayWidth;
     }
     return GLYPH_WIDTH / 2;  // Default width for unknown chars
+}
+
+QImage FontLoader::getColoredGlyph(QChar ch, const QColor& color) const {
+    const GlyphInfo* glyph = getGlyph(ch);
+    if (!glyph || glyph->mask.isNull()) {
+        return QImage();
+    }
+
+    QImage colored(GLYPH_WIDTH, GLYPH_HEIGHT, QImage::Format_ARGB32);
+    colored.fill(Qt::transparent);
+
+    for (int py = 0; py < GLYPH_HEIGHT; py++) {
+        for (int px = 0; px < GLYPH_WIDTH; px++) {
+            QColor maskColor = glyph->mask.pixelColor(px, py);
+            if (maskColor.alpha() > 0) {
+                colored.setPixelColor(px, py, color);
+            }
+        }
+    }
+
+    return colored;
 }
