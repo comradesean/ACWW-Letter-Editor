@@ -638,6 +638,20 @@ ApplicationWindow {
                         backend: backend
                         focus: true
 
+                        onRecipientNameClicked: {
+                            letterInfoDialog.selectedTab = 0  // Start on Receiver tab
+                            // Refresh all fields before opening
+                            recipientTownIdField.text = backend.recipientTownId.toString()
+                            recipientTownField.text = backend.recipientTown
+                            recipientPlayerIdField.text = backend.recipientPlayerId.toString()
+                            recipientNameField.text = backend.recipientName
+                            senderTownIdField.text = backend.senderTownId.toString()
+                            senderTownField.text = backend.senderTown
+                            senderPlayerIdField.text = backend.senderPlayerId.toString()
+                            senderNameField.text = backend.senderName
+                            letterInfoDialog.open()
+                        }
+
                         Keys.onPressed: {
                             if (event.key === Qt.Key_Backspace) {
                                 canvas.backspace()
@@ -1073,6 +1087,493 @@ ApplicationWindow {
             // Sync canvas text to backend before export
             backend.letterText = canvas.text
             backend.exportPng(pngDialog.fileUrl, 2)  // 2x scale (512x384)
+        }
+    }
+
+    // Letter Info Dialog (Receiver/Sender tabs)
+    Popup {
+        id: letterInfoDialog
+        modal: true
+        anchors.centerIn: parent
+        width: 340
+        padding: 0
+
+        property int selectedTab: 0  // 0 = Receiver, 1 = Sender
+
+        background: Rectangle {
+            color: bgElevated
+            radius: 12
+            border.color: divider
+            border.width: 1
+        }
+
+        contentItem: Column {
+            width: 340
+            spacing: 0
+
+            // Header
+            Rectangle {
+                id: headerRect
+                color: "transparent"
+                height: 90
+                width: parent.width
+
+                Column {
+                    anchors.fill: parent
+                    spacing: 0
+
+                    // Title
+                    Item {
+                        width: parent.width
+                        height: 44
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Letter Information"
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                            color: textPrimary
+                        }
+                    }
+
+                    // Tab bar
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 4
+
+                        // Receiver tab
+                        Rectangle {
+                            width: 120
+                            height: 36
+                            radius: 8
+                            color: letterInfoDialog.selectedTab === 0 ? bgActive : (receiverTabArea.containsMouse ? bgHover : "transparent")
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Receiver"
+                                font.pixelSize: 12
+                                font.weight: letterInfoDialog.selectedTab === 0 ? Font.Medium : Font.Normal
+                                color: letterInfoDialog.selectedTab === 0 ? textPrimary : textSecondary
+                            }
+
+                            MouseArea {
+                                id: receiverTabArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: letterInfoDialog.selectedTab = 0
+                            }
+                        }
+
+                        // Sender tab
+                        Rectangle {
+                            width: 120
+                            height: 36
+                            radius: 8
+                            color: letterInfoDialog.selectedTab === 1 ? bgActive : (senderTabArea.containsMouse ? bgHover : "transparent")
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Sender"
+                                font.pixelSize: 12
+                                font.weight: letterInfoDialog.selectedTab === 1 ? Font.Medium : Font.Normal
+                                color: letterInfoDialog.selectedTab === 1 ? textPrimary : textSecondary
+                            }
+
+                            MouseArea {
+                                id: senderTabArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: letterInfoDialog.selectedTab = 1
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: divider
+                }
+            }
+
+            // Content area
+            Item {
+                width: parent.width
+                height: 320
+
+                // Receiver tab content
+                Column {
+                    visible: letterInfoDialog.selectedTab === 0
+                    spacing: 16
+                    padding: 20
+                    width: parent.width
+
+                    Column {
+                        spacing: 6
+                        width: parent.width - 40
+
+                        Text {
+                            text: "Town ID"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: textMuted
+                        }
+
+                        TextField {
+                            id: recipientTownIdField
+                            width: parent.width
+                            text: backend.recipientTownId.toString()
+                            validator: IntValidator { bottom: 0; top: 65535 }
+                            font.pixelSize: 13
+                            color: textPrimary
+                            placeholderText: "0-65535"
+
+                            background: Rectangle {
+                                color: bgHover
+                                radius: 6
+                                border.color: recipientTownIdField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    Column {
+                        spacing: 6
+                        width: parent.width - 40
+
+                        Text {
+                            text: "Town Name"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: textMuted
+                        }
+
+                        TextField {
+                            id: recipientTownField
+                            width: parent.width
+                            text: backend.recipientTown
+                            maximumLength: 8
+                            font.pixelSize: 13
+                            color: textPrimary
+                            placeholderText: "Max 8 characters"
+
+                            background: Rectangle {
+                                color: bgHover
+                                radius: 6
+                                border.color: recipientTownField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    Column {
+                        spacing: 6
+                        width: parent.width - 40
+
+                        Text {
+                            text: "Player ID"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: textMuted
+                        }
+
+                        TextField {
+                            id: recipientPlayerIdField
+                            width: parent.width
+                            text: backend.recipientPlayerId.toString()
+                            validator: IntValidator { bottom: 0; top: 65535 }
+                            font.pixelSize: 13
+                            color: textPrimary
+                            placeholderText: "0-65535"
+
+                            background: Rectangle {
+                                color: bgHover
+                                radius: 6
+                                border.color: recipientPlayerIdField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    Column {
+                        spacing: 6
+                        width: parent.width - 40
+
+                        Text {
+                            text: "Player Name"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: textMuted
+                        }
+
+                        TextField {
+                            id: recipientNameField
+                            width: parent.width
+                            text: backend.recipientName
+                            maximumLength: 8
+                            font.pixelSize: 13
+                            color: textPrimary
+                            placeholderText: "Max 8 characters"
+
+                            background: Rectangle {
+                                color: bgHover
+                                radius: 6
+                                border.color: recipientNameField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+                }
+
+                // Sender tab content
+                Column {
+                    visible: letterInfoDialog.selectedTab === 1
+                    spacing: 16
+                    padding: 20
+                    width: parent.width
+
+                    Column {
+                        spacing: 6
+                        width: parent.width - 40
+
+                        Text {
+                            text: "Town ID"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: textMuted
+                        }
+
+                        TextField {
+                            id: senderTownIdField
+                            width: parent.width
+                            text: backend.senderTownId.toString()
+                            validator: IntValidator { bottom: 0; top: 65535 }
+                            font.pixelSize: 13
+                            color: textPrimary
+                            placeholderText: "0-65535"
+
+                            background: Rectangle {
+                                color: bgHover
+                                radius: 6
+                                border.color: senderTownIdField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    Column {
+                        spacing: 6
+                        width: parent.width - 40
+
+                        Text {
+                            text: "Town Name"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: textMuted
+                        }
+
+                        TextField {
+                            id: senderTownField
+                            width: parent.width
+                            text: backend.senderTown
+                            maximumLength: 8
+                            font.pixelSize: 13
+                            color: textPrimary
+                            placeholderText: "Max 8 characters"
+
+                            background: Rectangle {
+                                color: bgHover
+                                radius: 6
+                                border.color: senderTownField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    Column {
+                        spacing: 6
+                        width: parent.width - 40
+
+                        Text {
+                            text: "Player ID"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: textMuted
+                        }
+
+                        TextField {
+                            id: senderPlayerIdField
+                            width: parent.width
+                            text: backend.senderPlayerId.toString()
+                            validator: IntValidator { bottom: 0; top: 65535 }
+                            font.pixelSize: 13
+                            color: textPrimary
+                            placeholderText: "0-65535"
+
+                            background: Rectangle {
+                                color: bgHover
+                                radius: 6
+                                border.color: senderPlayerIdField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    Column {
+                        spacing: 6
+                        width: parent.width - 40
+
+                        Text {
+                            text: "Player Name"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: textMuted
+                        }
+
+                        TextField {
+                            id: senderNameField
+                            width: parent.width
+                            text: backend.senderName
+                            maximumLength: 8
+                            font.pixelSize: 13
+                            color: textPrimary
+                            placeholderText: "Max 8 characters"
+
+                            background: Rectangle {
+                                color: bgHover
+                                radius: 6
+                                border.color: senderNameField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Footer
+            Rectangle {
+                id: footerRect
+                color: "transparent"
+                height: 56
+                width: parent.width
+
+                Rectangle {
+                    anchors.top: parent.top
+                    width: parent.width
+                    height: 1
+                    color: divider
+                }
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 12
+
+                    // Cancel button
+                    Rectangle {
+                        width: 80
+                        height: 34
+                        radius: 8
+                        color: cancelBtn.pressed ? bgActive : (cancelBtn.containsMouse ? bgHover : bgElevated)
+                        border.color: divider
+                        border.width: 1
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Cancel"
+                            font.pixelSize: 12
+                            color: textSecondary
+                        }
+
+                        MouseArea {
+                            id: cancelBtn
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: letterInfoDialog.close()
+                        }
+                    }
+
+                    // Save button
+                    Rectangle {
+                        width: 80
+                        height: 34
+                        radius: 8
+                        color: saveBtn.pressed ? Qt.darker(accentPrimary, 1.15) :
+                               saveBtn.containsMouse ? Qt.lighter(accentPrimary, 1.1) : accentPrimary
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Save"
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                            color: "#FFFFFF"
+                        }
+
+                        MouseArea {
+                            id: saveBtn
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                // Check if recipient name changed
+                                var oldName = backend.recipientName
+                                var newName = recipientNameField.text
+                                var nameChanged = (oldName !== newName)
+
+                                // Validate new name won't exceed header width limit (150px, name token = 54px)
+                                if (nameChanged && newName.length > 0) {
+                                    var newWidth = canvas.calculateHeaderWidth(newName)
+                                    if (newWidth > 150) {
+                                        // Name too wide - don't save, show feedback
+                                        recipientNameField.text = oldName
+                                        return
+                                    }
+                                }
+
+                                // Save receiver info
+                                backend.recipientTownId = parseInt(recipientTownIdField.text) || 0
+                                backend.recipientTown = recipientTownField.text
+                                backend.recipientPlayerId = parseInt(recipientPlayerIdField.text) || 0
+
+                                // Update canvas header if recipient name changed
+                                if (nameChanged) {
+                                    var start = backend.recipientNameStart
+                                    var end = backend.recipientNameEnd
+                                    if (start >= 0 && end >= 0) {
+                                        // Get current text parts
+                                        var fullText = canvas.text
+                                        var firstNewline = fullText.indexOf('\n')
+                                        var header = firstNewline >= 0 ? fullText.substring(0, firstNewline) : fullText
+                                        var rest = firstNewline >= 0 ? fullText.substring(firstNewline) : ""
+
+                                        // Reconstruct header with new name
+                                        var before = header.substring(0, start)
+                                        var after = header.substring(end)
+                                        var newHeader = before + newName + after
+
+                                        // Update canvas text
+                                        canvas.text = newHeader + rest
+
+                                        // Update name position tracking
+                                        backend.recipientNameEnd = start + newName.length
+                                    }
+                                }
+                                backend.recipientName = newName
+
+                                // Save sender info
+                                backend.senderTownId = parseInt(senderTownIdField.text) || 0
+                                backend.senderTown = senderTownField.text
+                                backend.senderPlayerId = parseInt(senderPlayerIdField.text) || 0
+                                backend.senderName = senderNameField.text
+                                letterInfoDialog.close()
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
