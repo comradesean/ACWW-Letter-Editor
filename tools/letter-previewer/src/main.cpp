@@ -1,31 +1,31 @@
-#include <QApplication>
-#include <QFileDialog>
-#include <QMessageBox>
-#include "mainwindow.h"
+#include <QGuiApplication>
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include <QQuickStyle>
+#include "backend.h"
+#include "lettercanvasitem.h"
 
 int main(int argc, char* argv[]) {
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     app.setApplicationName("ACWW Letter Previewer");
 
-    // Get ROM path from file dialog
-    QString romPath = QFileDialog::getOpenFileName(
-        nullptr,
-        "Select Animal Crossing: Wild World ROM",
-        QString(),
-        "NDS ROM Files (*.nds);;All Files (*)"
-    );
+    // Set Material style
+    QQuickStyle::setStyle("Material");
 
-    if (romPath.isEmpty()) {
-        return 0;  // User cancelled
-    }
+    // Register QML types
+    qmlRegisterType<Backend>("LetterPreviewer", 1, 0, "Backend");
+    qmlRegisterType<LetterCanvasItem>("LetterPreviewer", 1, 0, "LetterCanvas");
 
-    MainWindow window;
-    if (!window.loadRom(romPath)) {
-        return 1;
-    }
+    QQmlApplicationEngine engine;
 
-    window.resize(550, 450);  // Sized to fit 512x384 canvas + controls
-    window.show();
+    const QUrl url(QStringLiteral("qrc:/qml/main.qml"));
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
+                     &app, [url](QObject* obj, const QUrl& objUrl) {
+        if (!obj && url == objUrl)
+            QCoreApplication::exit(-1);
+    }, Qt::QueuedConnection);
+
+    engine.load(url);
 
     return app.exec();
 }
