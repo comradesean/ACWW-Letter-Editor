@@ -229,16 +229,10 @@ void LetterCanvasItem::insertChar(const QString& ch) {
         // For body, check if we overflowed visual lines
         if (section == 1) {
             auto lines = wrapBodyText();
-            // Check if body text extends beyond 4 lines
             QString body = getBody();
-            int renderedChars = 0;
-            for (const auto& line : lines) {
-                renderedChars += line.first.length();
-            }
-            // Count newlines in body separately (they take a slot but aren't in rendered text)
-            int newlinesInBody = body.count('\n');
-            if (renderedChars + newlinesInBody < body.length()) {
-                // Overflow - revert
+            int lastLineEnd = lines[BODY_LINES - 1].second + lines[BODY_LINES - 1].first.length();
+            if (lastLineEnd < body.length() && body[lastLineEnd] != '\n') {
+                // Text overflowed beyond 4 lines - revert
                 m_cursorPos--;
                 m_text.remove(m_cursorPos, 1);
                 return;
@@ -605,14 +599,16 @@ void LetterCanvasItem::renderText(QPainter* painter) {
     int bodyStart = getBodyStartPos();
     int cursorInBody = (cursorSection == 1) ? m_cursorPos - bodyStart : -1;
 
+    bool cursorDrawn = false;
     for (int i = 0; i < BODY_LINES && i < wrappedLines.size(); i++) {
         QString lineText = wrappedLines[i].first;
         int lineStartInBody = wrappedLines[i].second;
         int lineEndInBody = lineStartInBody + lineText.length();
 
         int lineCursorCol = -1;
-        if (cursorInBody >= lineStartInBody && cursorInBody <= lineEndInBody) {
+        if (!cursorDrawn && cursorInBody >= lineStartInBody && cursorInBody <= lineEndInBody) {
             lineCursorCol = cursorInBody - lineStartInBody;
+            cursorDrawn = true;
         }
 
         renderLine(painter, lineText, BODY_LEFT, BODY_TOP + i * LINE_HEIGHT, lineCursorCol, font, false, textColor);

@@ -1523,16 +1523,6 @@ ApplicationWindow {
                                 var newName = recipientNameField.text
                                 var nameChanged = (oldName !== newName)
 
-                                // Validate new name won't exceed header width limit (150px, name token = 54px)
-                                if (nameChanged && newName.length > 0) {
-                                    var newWidth = canvas.calculateHeaderWidth(newName)
-                                    if (newWidth > 150) {
-                                        // Name too wide - don't save, show feedback
-                                        recipientNameField.text = oldName
-                                        return
-                                    }
-                                }
-
                                 // Save receiver info
                                 backend.recipientTownId = parseInt(recipientTownIdField.text) || 0
                                 backend.recipientTown = recipientTownField.text

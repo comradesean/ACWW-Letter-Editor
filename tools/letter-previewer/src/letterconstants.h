@@ -20,6 +20,6 @@ namespace LetterConstants {
     // File format: subject (16) + body (100) + signature (26)
     // Display: header can be template (16) + inserted name (8) = 24 max
     constexpr int MAX_HEADER_CHARS = 24;   // Template (16) + Name (8)
-    constexpr int MAX_BODY_CHARS = 100;    // 0x48-0xAB
+    constexpr int MAX_BODY_CHARS = 128;
     constexpr int MAX_FOOTER_CHARS = 32;
 }
