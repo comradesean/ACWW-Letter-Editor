@@ -109,6 +109,7 @@ public:
     Q_INVOKABLE void saveCurrentSlot();
     Q_INVOKABLE QVariantList getSlotSummaries() const;
     Q_INVOKABLE void clearLetter();
+    Q_INVOKABLE void importAddresseeFromSave();
 
     // For canvas rendering
     const StationeryLoader& stationery() const { return m_stationery; }

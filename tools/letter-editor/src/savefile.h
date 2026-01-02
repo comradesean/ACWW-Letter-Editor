@@ -54,6 +54,9 @@ public:
 
     // Player info
     Q_INVOKABLE QString getPlayerName(int player) const;
+    Q_INVOKABLE QString getPlayerTown(int player) const;
+    Q_INVOKABLE int getPlayerId(int player) const;
+    Q_INVOKABLE int getTownId(int player) const;
     Q_INVOKABLE bool playerExists(int player) const;
     Q_INVOKABLE QStringList getPlayerNames() const;
 
@@ -98,8 +101,11 @@ private:
     uint16_t calculateChecksum() const;
     void copyToBackup();
 
-    // Player name offset
+    // Player data offsets
     uint32_t getPlayerNameOffset(int player) const;
+    uint32_t getPlayerTownOffset(int player) const;
+    uint32_t getPlayerIdOffset(int player) const;
+    uint32_t getTownIdOffset(int player) const;
 
     QByteArray m_data;
     Region m_region = Region::Unknown;

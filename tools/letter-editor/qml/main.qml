@@ -282,6 +282,7 @@ ApplicationWindow {
                             ]},
                             { title: "Edit", items: [
                                 { text: "Edit Letter Info...", actionId: "editLetterInfo", enabledWhen: "loaded" },
+                                { text: "Import Addressee from Save", actionId: "importAddressee", enabledWhen: "saveLoaded" },
                                 { separator: true },
                                 { text: "Clear Letter", shortcut: "Ctrl+N", actionId: "clearLetter" }
                             ]},
@@ -432,6 +433,8 @@ ApplicationWindow {
                                                         senderPlayerIdField.text = backend.senderPlayerId.toString()
                                                         senderNameField.text = backend.senderName
                                                         letterInfoDialog.open()
+                                                    } else if (actionId === "importAddressee") {
+                                                        backend.importAddresseeFromSave()
                                                     } else if (actionId === "nextPaper") {
                                                         if (backend.loaded && paperCombo.currentIndex < 63)
                                                             paperCombo.currentIndex++

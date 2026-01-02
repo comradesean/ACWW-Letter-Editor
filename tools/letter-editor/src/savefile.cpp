@@ -89,16 +89,44 @@ static const uint32_t BANK_PLAYER_STRIDE = 0x4778;  // Offset between players
 // Player data structure offsets (EUR/USA)
 // Player data starts at 0x0C in the save file
 // Each player block is 0x228C bytes
-// Player name is at offset 0x2282 within each player's block
+// Offsets within each player's block:
+//   0x2276: Town ID (2 bytes)
+//   0x2278: Town Name (8 bytes)
+//   0x2280: Player ID (2 bytes)
+//   0x2282: Player Name (8 bytes)
 static const uint32_t PLAYER_DATA_START = 0x0C;
 static const uint32_t PLAYER_DATA_SIZE = 0x228C;
+static const uint32_t PLAYER_TOWN_ID_OFFSET_EUR = 0x2276;
+static const uint32_t PLAYER_TOWN_NAME_OFFSET_EUR = 0x2278;
+static const uint32_t PLAYER_ID_OFFSET_EUR = 0x2280;
 static const uint32_t PLAYER_NAME_OFFSET_EUR = 0x2282;
 
 static const uint32_t PLAYER_NAME_OFFSETS[4] = {
-    PLAYER_DATA_START + PLAYER_NAME_OFFSET_EUR,                           // Player 1: 0x228E
-    PLAYER_DATA_START + PLAYER_DATA_SIZE + PLAYER_NAME_OFFSET_EUR,        // Player 2: 0x451A
-    PLAYER_DATA_START + PLAYER_DATA_SIZE * 2 + PLAYER_NAME_OFFSET_EUR,    // Player 3: 0x67A6
-    PLAYER_DATA_START + PLAYER_DATA_SIZE * 3 + PLAYER_NAME_OFFSET_EUR     // Player 4: 0x8A32
+    PLAYER_DATA_START + PLAYER_NAME_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE + PLAYER_NAME_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 2 + PLAYER_NAME_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 3 + PLAYER_NAME_OFFSET_EUR
+};
+
+static const uint32_t PLAYER_TOWN_OFFSETS[4] = {
+    PLAYER_DATA_START + PLAYER_TOWN_NAME_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE + PLAYER_TOWN_NAME_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 2 + PLAYER_TOWN_NAME_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 3 + PLAYER_TOWN_NAME_OFFSET_EUR
+};
+
+static const uint32_t PLAYER_ID_OFFSETS[4] = {
+    PLAYER_DATA_START + PLAYER_ID_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE + PLAYER_ID_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 2 + PLAYER_ID_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 3 + PLAYER_ID_OFFSET_EUR
+};
+
+static const uint32_t TOWN_ID_OFFSETS[4] = {
+    PLAYER_DATA_START + PLAYER_TOWN_ID_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE + PLAYER_TOWN_ID_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 2 + PLAYER_TOWN_ID_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 3 + PLAYER_TOWN_ID_OFFSET_EUR
 };
 
 // Region data
@@ -252,6 +280,48 @@ QStringList SaveFile::getPlayerNames() const {
         names.append(name);
     }
     return names;
+}
+
+QString SaveFile::getPlayerTown(int player) const {
+    if (!m_loaded || player < 0 || player >= PLAYER_COUNT) {
+        return QString();
+    }
+
+    uint32_t offset = PLAYER_TOWN_OFFSETS[player];
+    if (offset + 8 > static_cast<uint32_t>(m_data.size())) {
+        return QString();
+    }
+
+    QByteArray townData = m_data.mid(offset, 8);
+    return decodeAcwwText(townData);
+}
+
+int SaveFile::getPlayerId(int player) const {
+    if (!m_loaded || player < 0 || player >= PLAYER_COUNT) {
+        return 0;
+    }
+
+    uint32_t offset = PLAYER_ID_OFFSETS[player];
+    if (offset + 2 > static_cast<uint32_t>(m_data.size())) {
+        return 0;
+    }
+
+    return static_cast<uint8_t>(m_data[offset]) |
+           (static_cast<uint8_t>(m_data[offset + 1]) << 8);
+}
+
+int SaveFile::getTownId(int player) const {
+    if (!m_loaded || player < 0 || player >= PLAYER_COUNT) {
+        return 0;
+    }
+
+    uint32_t offset = TOWN_ID_OFFSETS[player];
+    if (offset + 2 > static_cast<uint32_t>(m_data.size())) {
+        return 0;
+    }
+
+    return static_cast<uint8_t>(m_data[offset]) |
+           (static_cast<uint8_t>(m_data[offset + 1]) << 8);
 }
 
 Letter SaveFile::getLetter(int player, int storageType, int slot) const {

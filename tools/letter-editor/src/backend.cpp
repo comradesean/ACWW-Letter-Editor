@@ -903,3 +903,22 @@ void Backend::clearLetter() {
     emit currentPaperChanged();
     emit paperChanged();
 }
+
+void Backend::importAddresseeFromSave() {
+    if (!m_saveFile.isLoaded()) {
+        qDebug() << "Backend::importAddresseeFromSave: No save file loaded";
+        return;
+    }
+
+    // Get player info from current player in save file
+    m_recipientName = m_saveFile.getPlayerName(m_currentPlayer);
+    m_recipientTown = m_saveFile.getPlayerTown(m_currentPlayer);
+    m_recipientPlayerId = m_saveFile.getPlayerId(m_currentPlayer);
+    m_recipientTownId = m_saveFile.getTownId(m_currentPlayer);
+
+    emit recipientInfoChanged();
+
+    qDebug() << "Backend::importAddresseeFromSave: Imported"
+             << m_recipientName << "from" << m_recipientTown
+             << "(Player ID:" << m_recipientPlayerId << ", Town ID:" << m_recipientTownId << ")";
+}
