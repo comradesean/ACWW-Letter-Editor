@@ -16,6 +16,9 @@ class LetterCanvasItem : public QQuickPaintedItem {
     Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
     Q_PROPERTY(int cursorPosition READ cursorPosition WRITE setCursorPosition NOTIFY cursorPositionChanged)
     Q_PROPERTY(bool cursorVisible READ cursorVisible NOTIFY cursorVisibleChanged)
+    Q_PROPERTY(int selectionStart READ selectionStart NOTIFY selectionChanged)
+    Q_PROPERTY(int selectionEnd READ selectionEnd NOTIFY selectionChanged)
+    Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
 
 public:
     explicit LetterCanvasItem(QQuickItem* parent = nullptr);
@@ -33,11 +36,34 @@ public:
 
     bool cursorVisible() const { return m_cursorVisible; }
 
+    int selectionStart() const { return m_selectionStart; }
+    int selectionEnd() const { return m_selectionEnd; }
+    bool hasSelection() const { return m_selectionStart >= 0 && m_selectionEnd >= 0 && m_selectionStart != m_selectionEnd; }
+
+    Q_INVOKABLE void startSelection(qreal x, qreal y);
+    Q_INVOKABLE void updateSelection(qreal x, qreal y);
+    Q_INVOKABLE void clearSelection();
+    Q_INVOKABLE void deleteSelection();
+    Q_INVOKABLE void selectAll();
+    Q_INVOKABLE void extendSelectionLeft();
+    Q_INVOKABLE void extendSelectionRight();
+    Q_INVOKABLE void extendSelectionHome();
+    Q_INVOKABLE void extendSelectionEnd();
+    Q_INVOKABLE void extendSelectionUp();
+    Q_INVOKABLE void extendSelectionDown();
+    Q_INVOKABLE void copySelection();
+    Q_INVOKABLE void cutSelection();
+    Q_INVOKABLE void paste();
+
     Q_INVOKABLE void insertChar(const QString& ch);
     Q_INVOKABLE void backspace();
     Q_INVOKABLE void deleteChar();
     Q_INVOKABLE void moveCursorLeft();
     Q_INVOKABLE void moveCursorRight();
+    Q_INVOKABLE void moveCursorUp();
+    Q_INVOKABLE void moveCursorDown();
+    Q_INVOKABLE void moveCursorHome();
+    Q_INVOKABLE void moveCursorEnd();
     Q_INVOKABLE void newLine();
     Q_INVOKABLE void clearText();
     Q_INVOKABLE void handleClick(qreal x, qreal y);
@@ -49,6 +75,7 @@ signals:
     void textChanged();
     void cursorPositionChanged();
     void cursorVisibleChanged();
+    void selectionChanged();
     void recipientNameClicked();
 
 private slots:
@@ -59,11 +86,14 @@ private:
     void renderText(QPainter* painter);
     void renderLine(QPainter* painter, const QString& text, int x, int y,
                     int cursorCol, const FontLoader& font, bool rightAlign,
-                    const QColor& textColor);
+                    const QColor& textColor, int selStart = -1, int selEnd = -1,
+                    const QColor& selectionColor = QColor());
     void renderLineWithRecipient(QPainter* painter, const QString& text, int x, int y,
                                   int cursorCol, const FontLoader& font,
                                   const QColor& textColor, const QColor& recipientColor,
-                                  int recipientStart, int recipientEnd);
+                                  int recipientStart, int recipientEnd,
+                                  int selStart = -1, int selEnd = -1,
+                                  const QColor& selectionColor = QColor());
 
     // Text structure helpers (text = "header\nbody\nfooter")
     int getSection(int pos) const;  // 0=header, 1=body, 2=footer
@@ -79,11 +109,17 @@ private:
     // Click handling helper
     int findCharPosAtX(const QString& text, int targetX, int startX, const FontLoader& font) const;
 
+    // Selection helper - convert widget coordinates to text position
+    int charPosFromPoint(qreal x, qreal y) const;
+
     Backend* m_backend = nullptr;
     QString m_text;
     int m_cursorPos = 0;
     bool m_cursorVisible = true;
     QTimer m_cursorTimer;
+    int m_selectionStart = -1;
+    int m_selectionEnd = -1;
+    int m_selectionAnchor = -1;  // Fixed point of selection during drag
 
     // Use shared constants from letterconstants.h
     static constexpr int HEADER_LEFT = LetterConstants::HEADER_LEFT;
