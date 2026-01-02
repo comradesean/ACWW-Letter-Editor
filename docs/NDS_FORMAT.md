@@ -12,6 +12,7 @@ This document provides a comprehensive technical reference for the Nintendo DS R
 4. [Texture Formats](#4-texture-formats)
 5. [Stationery File Locations](#5-stationery-file-locations)
 6. [Font Format](#6-font-format)
+7. [Cloth Textures](#7-cloth-textures)
 
 ---
 
@@ -257,8 +258,10 @@ The TEX0 section contains texture and palette data.
 | 0x18 | 4 | Padding/Reserved |
 | 0x1C | 2 | Palette data size >> 3 |
 | 0x1E | 2 | Padding/Reserved |
-| 0x20 | 4 | Palette info offset (relative to TEX0) |
+| 0x20 | 4 | Palette info offset (relative to TEX0, 0 = no dictionary) |
 | 0x24 | 4 | Palette data offset (relative to TEX0) |
+
+**Note**: When palette info offset is 0, there is no palette dictionary. The palette data is accessed directly at `palDataOffset` without dictionary lookup.
 
 ### 3.3 3D Info / Dictionary Structure
 
@@ -282,9 +285,19 @@ Both texture and palette info sections use the same dictionary structure.
 
 The dictionary contains a Patricia tree for fast name lookups, followed by data entries.
 
+#### Patricia Tree
+
+The Patricia tree has `(numEntries + 2)` nodes, each 4 bytes. This is used for efficient name lookups but can be skipped when reading entries sequentially.
+
+**Data entries offset calculation:**
+```
+dataEntriesOffset = infoHeader(4) + dictHeader(4) + treeNodes((n+2) * 4)
+                  = 8 + (numEntries + 2) * 4
+```
+
 ### 3.4 Texture Data Entry (8 bytes per texture)
 
-Data entries start at: `dictOffset + dictSize`
+Data entries start at the calculated offset above (typically 0x14 for 1 entry, 0x18 for 2, etc.)
 
 | Offset | Size | Description |
 |--------|------|-------------|
@@ -714,6 +727,55 @@ The character map file lists the exact mapping of glyph index to character code.
 
 ---
 
+## 7. Cloth Textures
+
+ACWW stores cloth/fabric textures used for UI backgrounds in the `/cloth/` directory.
+
+### 7.1 Cloth File Locations
+
+```
+/cloth/
+├── 0/          # Cloth variant subdirectories
+├── 1/
+├── 2/
+├── 3/
+├── 4/
+├── 5/          # Contains cloth082.nsbtx (letter editor cloth)
+│   └── cloth082.nsbtx
+├── ...
+```
+
+### 7.2 Cloth NSBTX Format
+
+Cloth textures use the standard BTX0/NSBTX format with TEX0 sections (see Section 3). The file is LZ77 compressed in the ROM.
+
+Key characteristics of `cloth082.nsbtx`:
+- Compressed size: 256 bytes
+- Decompressed size: 708 bytes
+- Uses standard TEX0 header (0x28 bytes, see Section 3.2)
+- Palette info offset is 0 (no palette dictionary)
+
+### 7.3 Texture/Palette Offset Calculation
+
+When reading texture or palette data, the offset stored in the dictionary entry must be multiplied by 8:
+
+```
+actualOffset = dictOffset + (entryOffset * 8)
+```
+
+This is because offsets are stored right-shifted by 3 bits to save space.
+
+### 7.4 Cloth Texture Properties
+
+The cloth texture used in the letter editor (`cloth082.nsbtx`) has:
+- **Format**: Palette16 (4 bits per pixel)
+- **Dimensions**: 32×32 pixels
+- **Palette**: 16 colors, RGB555 format
+- **Color 0**: Transparent
+- **Palette info offset**: 0 (no dictionary, direct palette access)
+
+---
+
 ## References
 
 - GBATEK: NDS Technical Documentation
@@ -753,3 +815,16 @@ The character map file lists the exact mapping of glyph index to character code.
 | 4 | Palette256 | 8 | 256 colors |
 | 6 | A5I3 | 8 | 8 colors |
 | 7 | Direct | 16 | N/A |
+
+### Dictionary Data Entry Offset
+
+For n entries, data entries start at offset:
+```
+8 + (n + 2) * 4
+```
+
+| Entries | Offset |
+|---------|--------|
+| 1 | 0x14 (20) |
+| 2 | 0x18 (24) |
+| 3 | 0x1C (28) |

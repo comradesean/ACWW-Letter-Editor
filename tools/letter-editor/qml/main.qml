@@ -1,0 +1,1635 @@
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Controls.Material 2.15
+import QtQuick.Layouts 1.15
+import QtQuick.Dialogs 1.3
+import QtGraphicalEffects 1.15
+import QtQuick.Window 2.15
+import LetterPreviewer 1.0
+
+ApplicationWindow {
+    id: window
+    visible: true
+    width: 620
+    height: 580
+    minimumWidth: 580
+    minimumHeight: 520
+    title: "Letter Previewer"
+    flags: Qt.FramelessWindowHint | Qt.Window
+
+    // Modern Color System - Ocean palette
+    readonly property color bgBase: "#0B1120"
+    readonly property color bgSurface: "#111827"
+    readonly property color bgElevated: "#1E293B"
+    readonly property color bgHover: "#2D3B4F"
+    readonly property color bgActive: "#3B4963"
+    readonly property color accentPrimary: "#38BDF8"
+    readonly property color accentGreen: "#2DD4BF"
+    readonly property color textPrimary: "#F1F5F9"
+    readonly property color textSecondary: "#94A3B8"
+    readonly property color textMuted: "#64748B"
+    readonly property color divider: "#1E293B"
+
+    Material.theme: Material.Dark
+    Material.accent: accentPrimary
+    Material.background: bgBase
+
+    color: "transparent"
+
+    // Manual maximize state (more reliable for frameless windows)
+    property bool isMaximized: false
+    property rect normalGeometry: Qt.rect(100, 100, 620, 580)
+
+    function toggleMaximize() {
+        if (isMaximized) {
+            // Restore
+            window.x = normalGeometry.x
+            window.y = normalGeometry.y
+            window.width = normalGeometry.width
+            window.height = normalGeometry.height
+            isMaximized = false
+        } else {
+            // Save current geometry and maximize to current screen only
+            normalGeometry = Qt.rect(window.x, window.y, window.width, window.height)
+            var screen = window.screen
+            window.x = screen.virtualX
+            window.y = screen.virtualY
+            window.width = screen.width
+            window.height = screen.height
+            isMaximized = true
+        }
+    }
+
+    Backend {
+        id: backend
+    }
+
+    // Main container with rounded corners
+    Rectangle {
+        id: mainContainer
+        anchors.fill: parent
+        anchors.margins: isMaximized ? 0 : 1
+        radius: isMaximized ? 0 : 12
+        color: bgBase
+        clip: true
+
+        Behavior on anchors.margins { NumberAnimation { duration: 100 } }
+        Behavior on radius { NumberAnimation { duration: 100 } }
+
+        // Subtle border (hidden when maximized)
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: "transparent"
+            border.color: Qt.rgba(255, 255, 255, 0.06)
+            border.width: isMaximized ? 0 : 1
+            visible: !isMaximized
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
+
+            // Custom Title Bar
+            Rectangle {
+                id: titleBar
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                color: bgSurface
+                radius: isMaximized ? 0 : 12
+
+                // Square off bottom corners
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 12
+                    color: bgSurface
+                    visible: !isMaximized
+                }
+
+                // Drag area (behind the controls)
+                MouseArea {
+                    id: titleBarDrag
+                    anchors.fill: parent
+                    z: 0
+                    property point clickPos
+
+                    onPressed: {
+                        clickPos = Qt.point(mouse.x, mouse.y)
+                    }
+
+                    onPositionChanged: {
+                        if (pressed && !isMaximized) {
+                            var delta = Qt.point(mouse.x - clickPos.x, mouse.y - clickPos.y)
+                            window.x += delta.x
+                            window.y += delta.y
+                        }
+                    }
+
+                    onDoubleClicked: toggleMaximize()
+                }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 8
+                    spacing: 10
+                    z: 1
+
+                    // App icon
+                    Rectangle {
+                        width: 22
+                        height: 22
+                        radius: 6
+                        color: accentPrimary
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "✉"
+                            font.pixelSize: 11
+                            color: "#FFFFFF"
+                        }
+                    }
+
+                    // Title
+                    Text {
+                        text: "Letter Previewer"
+                        font.pixelSize: 12
+                        font.weight: Font.Medium
+                        color: textPrimary
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Window controls
+                    Row {
+                        id: windowControls
+                        spacing: 2
+                        z: 10
+
+                        // Minimize
+                        Rectangle {
+                            width: 36
+                            height: 28
+                            radius: 6
+                            color: minimizeArea.containsMouse ? bgHover : "transparent"
+
+                            Behavior on color { ColorAnimation { duration: 100 } }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "─"
+                                font.pixelSize: 10
+                                font.weight: Font.Bold
+                                color: textSecondary
+                            }
+
+                            MouseArea {
+                                id: minimizeArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: window.showMinimized()
+                            }
+                        }
+
+                        // Maximize
+                        Rectangle {
+                            width: 36
+                            height: 28
+                            radius: 6
+                            color: maximizeArea.containsMouse ? bgHover : "transparent"
+
+                            Behavior on color { ColorAnimation { duration: 100 } }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: isMaximized ? "❐" : "□"
+                                font.pixelSize: 11
+                                color: textSecondary
+                            }
+
+                            MouseArea {
+                                id: maximizeArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    toggleMaximize()
+                                }
+                            }
+                        }
+
+                        // Close
+                        Rectangle {
+                            width: 36
+                            height: 28
+                            radius: 6
+                            color: closeArea.containsMouse ? "#DC2626" : "transparent"
+
+                            Behavior on color { ColorAnimation { duration: 100 } }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "✕"
+                                font.pixelSize: 10
+                                font.weight: Font.Bold
+                                color: closeArea.containsMouse ? "#FFFFFF" : textSecondary
+                            }
+
+                            MouseArea {
+                                id: closeArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: Qt.quit()
+                            }
+                        }
+                    }
+                }
+
+                // Divider
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: divider
+                }
+            }
+
+            // Menu Bar
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                color: bgSurface
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    spacing: 2
+
+                    Repeater {
+                        model: [
+                            { title: "File", items: [
+                                { text: "Open ROM...", shortcut: "Ctrl+O", actionId: "openRom", disabledWhen: "loaded" },
+                                { text: "Open Save File...", shortcut: "Ctrl+Shift+O", actionId: "openSave", enabledWhen: "loaded" },
+                                { separator: true },
+                                { text: "Save", shortcut: "Ctrl+S", actionId: "saveSave", enabledWhen: "saveLoaded" },
+                                { text: "Save As...", shortcut: "Ctrl+Shift+S", actionId: "saveAs", enabledWhen: "saveLoaded" },
+                                { separator: true },
+                                { text: "Import Letter...", shortcut: "Ctrl+I", actionId: "importLtr", enabledWhen: "loaded" },
+                                { text: "Export Letter...", shortcut: "Ctrl+E", actionId: "exportLtr", enabledWhen: "loaded" },
+                                { text: "Export as PNG...", shortcut: "Ctrl+P", actionId: "exportPng", enabledWhen: "loaded" },
+                                { separator: true },
+                                { text: "Exit", shortcut: "Alt+F4", actionId: "exit" }
+                            ]},
+                            { title: "Edit", items: [
+                                { text: "Edit Letter Info...", actionId: "editLetterInfo", enabledWhen: "loaded" },
+                                { text: "Import Addressee from Save", actionId: "importAddressee", enabledWhen: "saveLoaded" },
+                                { separator: true },
+                                { text: "Clear Letter", shortcut: "Ctrl+N", actionId: "clearLetter" }
+                            ]},
+                            { title: "View", items: [
+                                { text: "Next Paper", shortcut: "Ctrl+]", actionId: "nextPaper" },
+                                { text: "Previous Paper", shortcut: "Ctrl+[", actionId: "prevPaper" }
+                            ]}
+                        ]
+
+                        Rectangle {
+                            width: menuText.width + 16
+                            height: 28
+                            radius: 6
+                            color: menuArea.containsMouse || menuPopup.visible ? bgHover : "transparent"
+
+                            Behavior on color { ColorAnimation { duration: 80 } }
+
+                            Text {
+                                id: menuText
+                                anchors.centerIn: parent
+                                text: modelData.title
+                                font.pixelSize: 12
+                                color: menuArea.containsMouse || menuPopup.visible ? textPrimary : textSecondary
+                            }
+
+                            MouseArea {
+                                id: menuArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: menuPopup.visible ? menuPopup.close() : menuPopup.open()
+                            }
+
+                            Popup {
+                                id: menuPopup
+                                y: parent.height + 4
+                                x: 0
+                                padding: 6
+                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                                modal: false
+                                focus: true
+
+                                background: Rectangle {
+                                    color: bgElevated
+                                    radius: 10
+                                    border.color: divider
+                                    border.width: 1
+                                }
+
+                                contentItem: Column {
+                                    spacing: 2
+
+                                    Repeater {
+                                        model: modelData.items
+
+                                        Rectangle {
+                                            property bool isSeparator: modelData.separator === true
+                                            property bool isDisabled: (modelData.disabledWhen === "loaded" && backend.loaded) ||
+                                                                      (modelData.enabledWhen === "loaded" && !backend.loaded) ||
+                                                                      (modelData.enabledWhen === "saveLoaded" && !backend.saveLoaded)
+
+                                            width: 160
+                                            height: isSeparator ? 9 : 32
+                                            radius: isSeparator ? 0 : 6
+                                            color: (!isSeparator && !isDisabled && itemMouseArea.containsMouse) ? bgHover : "transparent"
+
+                                            Behavior on color { ColorAnimation { duration: 80 } }
+
+                                            // Separator line
+                                            Rectangle {
+                                                visible: isSeparator
+                                                anchors.centerIn: parent
+                                                width: parent.width - 12
+                                                height: 1
+                                                color: divider
+                                            }
+
+                                            // Menu item content
+                                            RowLayout {
+                                                visible: !isSeparator
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                spacing: 8
+
+                                                Text {
+                                                    text: modelData.text || ""
+                                                    font.pixelSize: 12
+                                                    color: isDisabled ? textMuted : (itemMouseArea.containsMouse ? textPrimary : textSecondary)
+                                                    Layout.fillWidth: true
+                                                }
+
+                                                Text {
+                                                    text: modelData.shortcut || ""
+                                                    font.pixelSize: 11
+                                                    color: textMuted
+                                                    visible: text !== ""
+                                                    opacity: isDisabled ? 0.5 : 1
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: itemMouseArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                visible: !isSeparator
+                                                enabled: !isDisabled
+
+                                                onClicked: {
+                                                    var actionId = modelData.actionId
+                                                    if (actionId === "openRom") {
+                                                        fileDialog.open()
+                                                    } else if (actionId === "openSave") {
+                                                        openSaveDialog.open()
+                                                    } else if (actionId === "saveSave") {
+                                                        backend.saveSave()
+                                                    } else if (actionId === "saveAs") {
+                                                        saveSaveAsDialog.open()
+                                                    } else if (actionId === "importLtr") {
+                                                        importDialog.open()
+                                                    } else if (actionId === "exportLtr") {
+                                                        exportDialog.open()
+                                                    } else if (actionId === "exportPng") {
+                                                        pngDialog.open()
+                                                    } else if (actionId === "exit") {
+                                                        Qt.quit()
+                                                    } else if (actionId === "clearLetter") {
+                                                        canvas.clearText()
+                                                        paperCombo.currentIndex = 0
+                                                        // Clear letter info
+                                                        backend.recipientName = ""
+                                                        backend.recipientTown = ""
+                                                        backend.recipientPlayerId = 0
+                                                        backend.recipientTownId = 0
+                                                        backend.recipientNameStart = -1
+                                                        backend.recipientNameEnd = -1
+                                                        backend.senderName = ""
+                                                        backend.senderTown = ""
+                                                        backend.senderPlayerId = 0
+                                                        backend.senderTownId = 0
+                                                    } else if (actionId === "editLetterInfo") {
+                                                        letterInfoDialog.selectedTab = 0
+                                                        recipientTownIdField.text = backend.recipientTownId.toString()
+                                                        recipientTownField.text = backend.recipientTown
+                                                        recipientPlayerIdField.text = backend.recipientPlayerId.toString()
+                                                        recipientNameField.text = backend.recipientName
+                                                        senderTownIdField.text = backend.senderTownId.toString()
+                                                        senderTownField.text = backend.senderTown
+                                                        senderPlayerIdField.text = backend.senderPlayerId.toString()
+                                                        senderNameField.text = backend.senderName
+                                                        letterInfoDialog.open()
+                                                    } else if (actionId === "importAddressee") {
+                                                        backend.importAddresseeFromSave()
+                                                        // Update canvas with new header
+                                                        canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                                                    } else if (actionId === "nextPaper") {
+                                                        if (backend.loaded && paperCombo.currentIndex < 63)
+                                                            paperCombo.currentIndex++
+                                                    } else if (actionId === "prevPaper") {
+                                                        if (backend.loaded && paperCombo.currentIndex > 0)
+                                                            paperCombo.currentIndex--
+                                                    }
+                                                    menuPopup.close()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+                }
+
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: divider
+                }
+            }
+
+            // Toolbar
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 52
+                color: bgBase
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 20
+                    anchors.rightMargin: 20
+                    spacing: 16
+
+                    Row {
+                        spacing: 10
+
+                        Label {
+                            text: "Stationery"
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                            color: textMuted
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        ComboBox {
+                            id: paperCombo
+                            width: 160
+                            model: backend.paperNames
+                            enabled: backend.loaded
+                            currentIndex: backend.currentPaper
+                            font.pixelSize: 13
+
+                            onCurrentIndexChanged: {
+                                if (backend.loaded) {
+                                    backend.currentPaper = currentIndex
+                                }
+                            }
+
+                            delegate: ItemDelegate {
+                                width: paperCombo.width
+                                height: 34
+
+                                contentItem: Text {
+                                    text: modelData
+                                    color: highlighted ? textPrimary : textSecondary
+                                    font.pixelSize: 13
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 10
+                                }
+
+                                background: Rectangle {
+                                    color: highlighted ? bgHover : "transparent"
+                                    radius: 4
+
+                                    Behavior on color { ColorAnimation { duration: 80 } }
+                                }
+
+                                highlighted: paperCombo.highlightedIndex === index
+                            }
+
+                            indicator: Canvas {
+                                x: paperCombo.width - width - 10
+                                y: (paperCombo.height - height) / 2
+                                width: 10
+                                height: 6
+
+                                onPaint: {
+                                    var ctx = getContext("2d")
+                                    ctx.reset()
+                                    ctx.fillStyle = textMuted
+                                    ctx.moveTo(0, 0)
+                                    ctx.lineTo(width, 0)
+                                    ctx.lineTo(width / 2, height)
+                                    ctx.closePath()
+                                    ctx.fill()
+                                }
+                            }
+
+                            contentItem: Text {
+                                leftPadding: 12
+                                rightPadding: 28
+                                text: paperCombo.displayText
+                                font.pixelSize: 13
+                                color: paperCombo.enabled ? textPrimary : textMuted
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+
+                            background: Rectangle {
+                                implicitHeight: 34
+                                radius: 8
+                                color: paperCombo.down ? bgActive : (paperCombo.hovered ? bgHover : bgElevated)
+
+                                Behavior on color { ColorAnimation { duration: 80 } }
+                            }
+
+                            popup: Popup {
+                                y: paperCombo.height + 6
+                                width: paperCombo.width
+                                implicitHeight: Math.min(contentItem.implicitHeight + 12, 280)
+                                padding: 6
+
+                                contentItem: ListView {
+                                    clip: true
+                                    implicitHeight: contentHeight
+                                    model: paperCombo.popup.visible ? paperCombo.delegateModel : null
+                                    currentIndex: paperCombo.highlightedIndex
+                                    ScrollIndicator.vertical: ScrollIndicator {}
+                                }
+
+                                background: Rectangle {
+                                    color: bgElevated
+                                    radius: 10
+                                    border.color: divider
+                                    border.width: 1
+
+                                    layer.enabled: true
+                                    layer.effect: DropShadow {
+                                        transparentBorder: true
+                                        horizontalOffset: 0
+                                        verticalOffset: 6
+                                        radius: 16
+                                        samples: 33
+                                        color: "#50000000"
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Status badge
+                    Rectangle {
+                        visible: backend.loaded
+                        width: statusContent.width + 14
+                        height: 26
+                        radius: 6
+                        color: Qt.rgba(accentGreen.r, accentGreen.g, accentGreen.b, 0.12)
+
+                        Behavior on opacity { NumberAnimation { duration: 200 } }
+
+                        Row {
+                            id: statusContent
+                            anchors.centerIn: parent
+                            spacing: 6
+
+                            Rectangle {
+                                width: 6
+                                height: 6
+                                radius: 3
+                                color: accentGreen
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+
+                            Text {
+                                text: "ROM Loaded"
+                                font.pixelSize: 11
+                                font.weight: Font.Medium
+                                color: accentGreen
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Main content area (sidebar + canvas)
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 0
+
+                // Save browser sidebar
+                SaveBrowser {
+                    id: saveBrowser
+                    Layout.preferredWidth: 200
+                    Layout.fillHeight: true
+                    visible: backend.saveLoaded
+                    backend: backend
+
+                    // Pass colors from window
+                    bgBase: window.bgBase
+                    bgSurface: window.bgSurface
+                    bgElevated: window.bgElevated
+                    bgHover: window.bgHover
+                    bgActive: window.bgActive
+                    accentPrimary: window.accentPrimary
+                    accentGreen: window.accentGreen
+                    textPrimary: window.textPrimary
+                    textSecondary: window.textSecondary
+                    textMuted: window.textMuted
+                    divider: window.divider
+
+                    onSlotSelected: {
+                        canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                        paperCombo.currentIndex = backend.currentPaper
+                        canvas.forceActiveFocus()
+                    }
+                }
+
+                // Divider between sidebar and canvas
+                Rectangle {
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+                    color: divider
+                    visible: backend.saveLoaded
+                }
+
+                // Canvas area
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+
+                    // Focus ring
+                    Rectangle {
+                        anchors.centerIn: canvasFrame
+                    width: canvasFrame.width + 6
+                    height: canvasFrame.height + 6
+                    radius: 15
+                    color: "transparent"
+                    border.color: canvas.activeFocus ? accentPrimary : "transparent"
+                    border.width: 2
+                    opacity: canvas.activeFocus ? 0.6 : 0
+
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                    Behavior on border.color { ColorAnimation { duration: 150 } }
+                }
+
+                // Canvas with rounded corners
+                Rectangle {
+                    id: canvasFrame
+                    anchors.centerIn: parent
+                    width: 520
+                    height: 392
+                    radius: 12
+                    color: bgElevated
+                    clip: true
+
+                    layer.enabled: true
+                    layer.effect: DropShadow {
+                        transparentBorder: true
+                        horizontalOffset: 0
+                        verticalOffset: 12
+                        radius: 32
+                        samples: 65
+                        color: "#30000000"
+                    }
+
+                    LetterCanvas {
+                        id: canvas
+                        anchors.centerIn: parent
+                        width: 512
+                        height: 384
+                        backend: backend
+                        focus: true
+
+                        onRecipientNameClicked: {
+                            letterInfoDialog.selectedTab = 0  // Start on Receiver tab
+                            // Refresh all fields before opening
+                            recipientTownIdField.text = backend.recipientTownId.toString()
+                            recipientTownField.text = backend.recipientTown
+                            recipientPlayerIdField.text = backend.recipientPlayerId.toString()
+                            recipientNameField.text = backend.recipientName
+                            senderTownIdField.text = backend.senderTownId.toString()
+                            senderTownField.text = backend.senderTown
+                            senderPlayerIdField.text = backend.senderPlayerId.toString()
+                            senderNameField.text = backend.senderName
+                            letterInfoDialog.open()
+                        }
+
+                        Keys.onPressed: {
+                            if (event.key === Qt.Key_Backspace) {
+                                canvas.backspace()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Delete) {
+                                canvas.deleteChar()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Left) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionLeft()
+                                } else {
+                                    canvas.moveCursorLeft()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Right) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionRight()
+                                } else {
+                                    canvas.moveCursorRight()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Up) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionUp()
+                                } else {
+                                    canvas.moveCursorUp()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Down) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionDown()
+                                } else {
+                                    canvas.moveCursorDown()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Home) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionHome()
+                                } else {
+                                    canvas.moveCursorHome()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_End) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionEnd()
+                                } else {
+                                    canvas.moveCursorEnd()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) {
+                                canvas.selectAll()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
+                                canvas.copySelection()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_X && (event.modifiers & Qt.ControlModifier)) {
+                                canvas.cutSelection()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_V && (event.modifiers & Qt.ControlModifier)) {
+                                canvas.paste()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                canvas.newLine()
+                                event.accepted = true
+                            } else if (event.text.length > 0) {
+                                canvas.insertChar(event.text)
+                                event.accepted = true
+                            }
+                        }
+
+                        // Tooltip overlay for greeting line (recipient) - hover only
+                        MouseArea {
+                            id: greetingHover
+                            x: 96   // Header at x=48 in 1x, scaled 2x = 96
+                            y: 80   // Header at y=40 in 1x, scaled 2x = 80
+                            width: 300
+                            height: 32
+                            hoverEnabled: true
+                            visible: backend.recipientName !== "" || backend.recipientTown !== ""
+                            acceptedButtons: Qt.NoButton  // Don't capture clicks
+
+                            ToolTip {
+                                id: recipientTooltip
+                                visible: greetingHover.containsMouse && (backend.recipientName !== "" || backend.recipientTown !== "")
+                                delay: 400
+                                timeout: 5000
+
+                                background: Rectangle {
+                                    color: bgElevated
+                                    radius: 6
+                                    border.color: divider
+                                    border.width: 1
+                                }
+
+                                contentItem: Text {
+                                    text: {
+                                        if (backend.recipientName !== "" && backend.recipientTown !== "")
+                                            return "To: " + backend.recipientName + " from " + backend.recipientTown
+                                        else if (backend.recipientName !== "")
+                                            return "To: " + backend.recipientName
+                                        else if (backend.recipientTown !== "")
+                                            return "To: " + backend.recipientTown
+                                        return ""
+                                    }
+                                    font.pixelSize: 12
+                                    color: textPrimary
+                                }
+                            }
+                        }
+
+                        // Tooltip overlay for signature line (sender) - hover only
+                        MouseArea {
+                            id: signatureHover
+                            x: 200  // Footer is right-aligned, roughly in this area
+                            y: 272  // Footer at y=136 in 1x, scaled 2x = 272
+                            width: 280
+                            height: 32
+                            hoverEnabled: true
+                            visible: backend.senderName !== "" || backend.senderTown !== ""
+                            acceptedButtons: Qt.NoButton  // Don't capture clicks
+
+                            ToolTip {
+                                id: senderTooltip
+                                visible: signatureHover.containsMouse && (backend.senderName !== "" || backend.senderTown !== "")
+                                delay: 400
+                                timeout: 5000
+
+                                background: Rectangle {
+                                    color: bgElevated
+                                    radius: 6
+                                    border.color: divider
+                                    border.width: 1
+                                }
+
+                                contentItem: Text {
+                                    text: {
+                                        if (backend.senderName !== "" && backend.senderTown !== "")
+                                            return "From: " + backend.senderName + " from " + backend.senderTown
+                                        else if (backend.senderName !== "")
+                                            return "From: " + backend.senderName
+                                        else if (backend.senderTown !== "")
+                                            return "From: " + backend.senderTown
+                                        return ""
+                                    }
+                                    font.pixelSize: 12
+                                    color: textPrimary
+                                }
+                            }
+                        }
+
+                        // Main click/drag handler - on top
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.IBeamCursor
+                            property bool dragging: false
+
+                            onPressed: {
+                                canvas.startSelection(mouse.x, mouse.y)
+                                dragging = true
+                                canvas.forceActiveFocus()
+                            }
+                            onPositionChanged: {
+                                if (dragging) {
+                                    canvas.updateSelection(mouse.x, mouse.y)
+                                }
+                            }
+                            onReleased: {
+                                dragging = false
+                                // If no selection was made (just a click), treat as cursor positioning
+                                if (!canvas.hasSelection) {
+                                    canvas.handleClick(mouse.x, mouse.y)
+                                }
+                            }
+                        }
+                    }
+                }
+                }  // Close Canvas area Item
+            }  // Close RowLayout (Main content area)
+
+            // Footer
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                color: bgSurface
+                radius: isMaximized ? 0 : 12
+
+                // Square off top corners
+                Rectangle {
+                    width: parent.width
+                    height: 12
+                    color: bgSurface
+                    visible: !isMaximized
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: divider
+                }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 20
+                    anchors.rightMargin: 20
+
+                    Text {
+                        text: backend.loaded ? "Type to edit  ·  Arrow keys to navigate  ·  Enter for new line" : "File → Open ROM to begin"
+                        font.pixelSize: 11
+                        color: textMuted
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        visible: backend.loaded
+                        text: (paperCombo.currentIndex + 1) + " / 64"
+                        font.pixelSize: 11
+                        color: textMuted
+                    }
+                }
+            }
+        }
+    }
+
+    // Resize handles (hidden when maximized)
+    MouseArea {
+        id: resizeLeft
+        visible: !isMaximized
+        width: 5
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.topMargin: 40
+        anchors.bottomMargin: 5
+        cursorShape: Qt.SizeHorCursor
+        property point clickPos
+
+        onPressed: clickPos = Qt.point(mouse.x, mouse.y)
+        onPositionChanged: {
+            if (pressed) {
+                var delta = mouse.x - clickPos.x
+                if (window.width - delta >= window.minimumWidth) {
+                    window.x += delta
+                    window.width -= delta
+                }
+            }
+        }
+    }
+
+    MouseArea {
+        id: resizeRight
+        visible: !isMaximized
+        width: 5
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.topMargin: 40
+        anchors.bottomMargin: 5
+        cursorShape: Qt.SizeHorCursor
+        property point clickPos
+
+        onPressed: clickPos = Qt.point(mouse.x, mouse.y)
+        onPositionChanged: {
+            if (pressed) {
+                var delta = mouse.x - clickPos.x
+                if (window.width + delta >= window.minimumWidth) {
+                    window.width += delta
+                }
+            }
+        }
+    }
+
+    MouseArea {
+        id: resizeBottom
+        visible: !isMaximized
+        height: 5
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 5
+        anchors.rightMargin: 5
+        cursorShape: Qt.SizeVerCursor
+        property point clickPos
+
+        onPressed: clickPos = Qt.point(mouse.x, mouse.y)
+        onPositionChanged: {
+            if (pressed) {
+                var delta = mouse.y - clickPos.y
+                if (window.height + delta >= window.minimumHeight) {
+                    window.height += delta
+                }
+            }
+        }
+    }
+
+    MouseArea {
+        id: resizeCorner
+        visible: !isMaximized
+        width: 12
+        height: 12
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        cursorShape: Qt.SizeFDiagCursor
+        property point clickPos
+
+        onPressed: clickPos = Qt.point(mouse.x, mouse.y)
+        onPositionChanged: {
+            if (pressed) {
+                var deltaX = mouse.x - clickPos.x
+                var deltaY = mouse.y - clickPos.y
+                if (window.width + deltaX >= window.minimumWidth) {
+                    window.width += deltaX
+                }
+                if (window.height + deltaY >= window.minimumHeight) {
+                    window.height += deltaY
+                }
+            }
+        }
+    }
+
+    // Welcome overlay
+    Rectangle {
+        anchors.fill: mainContainer
+        anchors.margins: isMaximized ? 0 : 1
+        radius: isMaximized ? 0 : 12
+        color: Qt.rgba(bgBase.r, bgBase.g, bgBase.b, 0.94)
+        visible: !backend.loaded
+
+        Behavior on opacity { NumberAnimation { duration: 200 } }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {}
+        }
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 28
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 72
+                height: 72
+                radius: 16
+                color: bgElevated
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "✉"
+                    font.pixelSize: 32
+                    color: accentPrimary
+                }
+            }
+
+            Column {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 8
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Letter Previewer"
+                    font.pixelSize: 20
+                    font.weight: Font.DemiBold
+                    color: textPrimary
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Preview and compose letters with original game stationery"
+                    font.pixelSize: 13
+                    color: textSecondary
+                }
+            }
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 150
+                height: 42
+                radius: 10
+                color: openButton.pressed ? Qt.darker(accentPrimary, 1.15) :
+                       openButton.containsMouse ? Qt.lighter(accentPrimary, 1.1) : accentPrimary
+
+                Behavior on color { ColorAnimation { duration: 100 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Open ROM"
+                    font.pixelSize: 13
+                    font.weight: Font.Medium
+                    color: "#FFFFFF"
+                }
+
+                MouseArea {
+                    id: openButton
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: fileDialog.open()
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "or press Ctrl+O"
+                font.pixelSize: 11
+                color: textMuted
+            }
+        }
+    }
+
+    // Keyboard shortcuts
+    Shortcut {
+        sequence: "Ctrl+O"
+        enabled: !backend.loaded
+        onActivated: fileDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+I"
+        enabled: backend.loaded
+        onActivated: importDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+E"
+        enabled: backend.loaded
+        onActivated: exportDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+P"
+        enabled: backend.loaded
+        onActivated: pngDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+N"
+        enabled: backend.loaded
+        onActivated: {
+            canvas.clearText()
+            paperCombo.currentIndex = 0
+            backend.recipientName = ""
+            backend.recipientTown = ""
+            backend.recipientPlayerId = 0
+            backend.recipientTownId = 0
+            backend.recipientNameStart = -1
+            backend.recipientNameEnd = -1
+            backend.senderName = ""
+            backend.senderTown = ""
+            backend.senderPlayerId = 0
+            backend.senderTownId = 0
+        }
+    }
+
+    Shortcut {
+        sequence: "Ctrl+]"
+        enabled: backend.loaded && paperCombo.currentIndex < 63
+        onActivated: paperCombo.currentIndex++
+    }
+
+    Shortcut {
+        sequence: "Ctrl+["
+        enabled: backend.loaded && paperCombo.currentIndex > 0
+        onActivated: paperCombo.currentIndex--
+    }
+
+    // File dialogs
+    FileDialog {
+        id: fileDialog
+        title: "Select Animal Crossing: Wild World ROM"
+        nameFilters: ["NDS ROM Files (*.nds)", "All Files (*)"]
+        onAccepted: {
+            if (backend.loadRom(fileDialog.fileUrl)) {
+                canvas.forceActiveFocus()
+            }
+        }
+    }
+
+    FileDialog {
+        id: importDialog
+        title: "Import Letter"
+        nameFilters: ["Letter Files (*.ltr)", "All Files (*)"]
+        onAccepted: {
+            if (backend.importLtr(importDialog.fileUrl)) {
+                canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                paperCombo.currentIndex = backend.currentPaper
+                canvas.forceActiveFocus()
+            }
+        }
+    }
+
+    FileDialog {
+        id: exportDialog
+        title: "Export Letter"
+        selectExisting: false
+        nameFilters: ["Letter Files (*.ltr)", "All Files (*)"]
+        onAccepted: {
+            // Sync canvas text to backend before export
+            backend.letterText = canvas.text
+            backend.exportLtr(exportDialog.fileUrl)
+        }
+    }
+
+    FileDialog {
+        id: pngDialog
+        title: "Export as PNG"
+        selectExisting: false
+        nameFilters: ["PNG Images (*.png)", "All Files (*)"]
+        onAccepted: {
+            // Sync canvas text to backend before export
+            backend.letterText = canvas.text
+            backend.exportPng(pngDialog.fileUrl, 2)  // 2x scale (512x384)
+        }
+    }
+
+    FileDialog {
+        id: openSaveDialog
+        title: "Open Save File"
+        nameFilters: ["Save Files (*.sav)", "All Files (*)"]
+        onAccepted: {
+            if (backend.loadSave(openSaveDialog.fileUrl)) {
+                canvas.forceActiveFocus()
+            }
+        }
+    }
+
+    FileDialog {
+        id: saveSaveAsDialog
+        title: "Save As"
+        selectExisting: false
+        nameFilters: ["Save Files (*.sav)", "All Files (*)"]
+        onAccepted: {
+            backend.saveSave(saveSaveAsDialog.fileUrl)
+        }
+    }
+
+    // Letter Info Dialog (Receiver/Sender tabs)
+    Popup {
+        id: letterInfoDialog
+        modal: true
+        anchors.centerIn: parent
+        width: 280
+        padding: 0
+
+        property int selectedTab: 0
+
+        background: Rectangle {
+            color: bgElevated
+            radius: 8
+            border.color: divider
+            border.width: 1
+        }
+
+        contentItem: Column {
+            spacing: 0
+
+            // Header with tabs
+            Item {
+                width: parent.width
+                height: 36
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 24
+
+                    Text {
+                        text: "To"
+                        font.pixelSize: 12
+                        font.weight: letterInfoDialog.selectedTab === 0 ? Font.DemiBold : Font.Normal
+                        color: letterInfoDialog.selectedTab === 0 ? accentPrimary : textSecondary
+                        opacity: receiverTabArea.containsMouse && letterInfoDialog.selectedTab !== 0 ? 0.8 : 1
+
+                        Rectangle {
+                            visible: letterInfoDialog.selectedTab === 0
+                            anchors.top: parent.bottom
+                            anchors.topMargin: 2
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: parent.width + 8
+                            height: 2
+                            radius: 1
+                            color: accentPrimary
+                        }
+
+                        MouseArea {
+                            id: receiverTabArea
+                            anchors.fill: parent
+                            anchors.margins: -8
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: letterInfoDialog.selectedTab = 0
+                        }
+                    }
+
+                    Text {
+                        text: "From"
+                        font.pixelSize: 12
+                        font.weight: letterInfoDialog.selectedTab === 1 ? Font.DemiBold : Font.Normal
+                        color: letterInfoDialog.selectedTab === 1 ? accentPrimary : textSecondary
+                        opacity: senderTabArea.containsMouse && letterInfoDialog.selectedTab !== 1 ? 0.8 : 1
+
+                        Rectangle {
+                            visible: letterInfoDialog.selectedTab === 1
+                            anchors.top: parent.bottom
+                            anchors.topMargin: 2
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: parent.width + 8
+                            height: 2
+                            radius: 1
+                            color: accentPrimary
+                        }
+
+                        MouseArea {
+                            id: senderTabArea
+                            anchors.fill: parent
+                            anchors.margins: -8
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: letterInfoDialog.selectedTab = 1
+                        }
+                    }
+                }
+
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: divider
+                }
+            }
+
+            // Form content
+            Item {
+                width: parent.width
+                height: contentCol.height + 24
+
+                Column {
+                    id: contentCol
+                    anchors.centerIn: parent
+                    width: parent.width - 24
+                    spacing: 10
+
+                    // Row 1: Player Name
+                    Column {
+                        width: parent.width
+                        spacing: 3
+                        Text { text: "Name"; font.pixelSize: 10; color: textMuted }
+                        TextField {
+                            id: recipientNameField
+                            visible: letterInfoDialog.selectedTab === 0
+                            width: parent.width; height: 28
+                            text: backend.recipientName
+                            maximumLength: 8
+                            font.pixelSize: 11; color: textPrimary
+                            leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                            background: Rectangle {
+                                color: bgHover; radius: 4
+                                border.color: recipientNameField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                        TextField {
+                            id: senderNameField
+                            visible: letterInfoDialog.selectedTab === 1
+                            width: parent.width; height: 28
+                            text: backend.senderName
+                            maximumLength: 8
+                            font.pixelSize: 11; color: textPrimary
+                            leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                            background: Rectangle {
+                                color: bgHover; radius: 4
+                                border.color: senderNameField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    // Row 2: Town Name
+                    Column {
+                        width: parent.width
+                        spacing: 3
+                        Text { text: "Town"; font.pixelSize: 10; color: textMuted }
+                        TextField {
+                            id: recipientTownField
+                            visible: letterInfoDialog.selectedTab === 0
+                            width: parent.width; height: 28
+                            text: backend.recipientTown
+                            maximumLength: 8
+                            font.pixelSize: 11; color: textPrimary
+                            leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                            background: Rectangle {
+                                color: bgHover; radius: 4
+                                border.color: recipientTownField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                        TextField {
+                            id: senderTownField
+                            visible: letterInfoDialog.selectedTab === 1
+                            width: parent.width; height: 28
+                            text: backend.senderTown
+                            maximumLength: 8
+                            font.pixelSize: 11; color: textPrimary
+                            leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                            background: Rectangle {
+                                color: bgHover; radius: 4
+                                border.color: senderTownField.activeFocus ? accentPrimary : divider
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    // Row 3: Player ID + Town ID
+                    Row {
+                        spacing: 8
+                        width: parent.width
+
+                        Column {
+                            width: (parent.width - 8) / 2
+                            spacing: 3
+                            Text { text: "Player ID"; font.pixelSize: 10; color: textMuted }
+                            TextField {
+                                id: recipientPlayerIdField
+                                visible: letterInfoDialog.selectedTab === 0
+                                width: parent.width; height: 28
+                                text: backend.recipientPlayerId.toString()
+                                validator: IntValidator { bottom: 0; top: 65535 }
+                                font.pixelSize: 11; color: textPrimary
+                                leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                                background: Rectangle {
+                                    color: bgHover; radius: 4
+                                    border.color: recipientPlayerIdField.activeFocus ? accentPrimary : divider
+                                    border.width: 1
+                                }
+                            }
+                            TextField {
+                                id: senderPlayerIdField
+                                visible: letterInfoDialog.selectedTab === 1
+                                width: parent.width; height: 28
+                                text: backend.senderPlayerId.toString()
+                                validator: IntValidator { bottom: 0; top: 65535 }
+                                font.pixelSize: 11; color: textPrimary
+                                leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                                background: Rectangle {
+                                    color: bgHover; radius: 4
+                                    border.color: senderPlayerIdField.activeFocus ? accentPrimary : divider
+                                    border.width: 1
+                                }
+                            }
+                        }
+
+                        Column {
+                            width: (parent.width - 8) / 2
+                            spacing: 3
+                            Text { text: "Town ID"; font.pixelSize: 10; color: textMuted }
+                            TextField {
+                                id: recipientTownIdField
+                                visible: letterInfoDialog.selectedTab === 0
+                                width: parent.width; height: 28
+                                text: backend.recipientTownId.toString()
+                                validator: IntValidator { bottom: 0; top: 65535 }
+                                font.pixelSize: 11; color: textPrimary
+                                leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                                background: Rectangle {
+                                    color: bgHover; radius: 4
+                                    border.color: recipientTownIdField.activeFocus ? accentPrimary : divider
+                                    border.width: 1
+                                }
+                            }
+                            TextField {
+                                id: senderTownIdField
+                                visible: letterInfoDialog.selectedTab === 1
+                                width: parent.width; height: 28
+                                text: backend.senderTownId.toString()
+                                validator: IntValidator { bottom: 0; top: 65535 }
+                                font.pixelSize: 11; color: textPrimary
+                                leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                                background: Rectangle {
+                                    color: bgHover; radius: 4
+                                    border.color: senderTownIdField.activeFocus ? accentPrimary : divider
+                                    border.width: 1
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Footer
+            Item {
+                width: parent.width
+                height: 40
+
+                Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: divider }
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 8
+
+                    Text {
+                        text: "Cancel"
+                        font.pixelSize: 11
+                        color: cancelArea.containsMouse ? textPrimary : textSecondary
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        MouseArea {
+                            id: cancelArea
+                            anchors.fill: parent
+                            anchors.margins: -8
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: letterInfoDialog.close()
+                        }
+                    }
+
+                    Rectangle { width: 1; height: 16; color: divider; anchors.verticalCenter: parent.verticalCenter }
+
+                    Rectangle {
+                        width: 52; height: 24; radius: 4
+                        color: saveArea.pressed ? Qt.darker(accentPrimary, 1.1) :
+                               saveArea.containsMouse ? Qt.lighter(accentPrimary, 1.05) : accentPrimary
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Save"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: "#FFFFFF"
+                        }
+
+                        MouseArea {
+                            id: saveArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                var oldName = backend.recipientName
+                                var newName = recipientNameField.text
+                                var nameChanged = (oldName !== newName)
+
+                                backend.recipientTownId = parseInt(recipientTownIdField.text) || 0
+                                backend.recipientTown = recipientTownField.text
+                                backend.recipientPlayerId = parseInt(recipientPlayerIdField.text) || 0
+
+                                if (nameChanged) {
+                                    var start = backend.recipientNameStart
+                                    var end = backend.recipientNameEnd
+                                    var fullText = canvas.text
+                                    var firstNewline = fullText.indexOf('\n')
+                                    var header = firstNewline >= 0 ? fullText.substring(0, firstNewline) : fullText
+                                    var rest = firstNewline >= 0 ? fullText.substring(firstNewline) : "\n\n"
+
+                                    if (start >= 0 && end >= 0) {
+                                        // Replace or remove existing name
+                                        canvas.text = header.substring(0, start) + newName + header.substring(end) + rest
+                                        if (newName.length > 0) {
+                                            backend.recipientNameEnd = start + newName.length
+                                        } else {
+                                            // Name removed - reset positions
+                                            backend.recipientNameStart = -1
+                                            backend.recipientNameEnd = -1
+                                        }
+                                    } else if (newName.length > 0) {
+                                        // First time - insert name at position 0
+                                        canvas.text = newName + header + rest
+                                        backend.recipientNameStart = 0
+                                        backend.recipientNameEnd = newName.length
+                                    }
+                                }
+                                backend.recipientName = newName
+
+                                backend.senderTownId = parseInt(senderTownIdField.text) || 0
+                                backend.senderTown = senderTownField.text
+                                backend.senderPlayerId = parseInt(senderPlayerIdField.text) || 0
+                                backend.senderName = senderNameField.text
+                                letterInfoDialog.close()
+                                canvas.forceActiveFocus()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        // Try to find ROM in executable directory first
+        var localRom = backend.findLocalRom()
+        if (localRom !== "") {
+            backend.loadRom(Qt.resolvedUrl("file://" + localRom))
+            if (backend.loaded) {
+                canvas.forceActiveFocus()
+                return
+            }
+        }
+        // No local ROM found, show file dialog
+        fileDialog.open()
+    }
+}
