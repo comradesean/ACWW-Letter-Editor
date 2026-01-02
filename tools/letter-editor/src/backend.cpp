@@ -911,11 +911,41 @@ void Backend::importAddresseeFromSave() {
     }
 
     // Get player info from current player in save file
-    m_recipientName = m_saveFile.getPlayerName(m_currentPlayer);
+    QString newName = m_saveFile.getPlayerName(m_currentPlayer);
     m_recipientTown = m_saveFile.getPlayerTown(m_currentPlayer);
     m_recipientPlayerId = m_saveFile.getPlayerId(m_currentPlayer);
     m_recipientTownId = m_saveFile.getTownId(m_currentPlayer);
 
+    // Update letter header with new recipient name
+    if (newName != m_recipientName) {
+        // Parse current text into sections
+        int firstNewline = m_letterText.indexOf('\n');
+        QString header = firstNewline >= 0 ? m_letterText.left(firstNewline) : m_letterText;
+        QString rest = firstNewline >= 0 ? m_letterText.mid(firstNewline) : "\n\n";
+
+        if (m_recipientNameStart >= 0 && m_recipientNameEnd >= 0 && m_recipientNameEnd <= header.length()) {
+            // Replace existing name in header
+            header = header.left(m_recipientNameStart) + newName + header.mid(m_recipientNameEnd);
+            if (!newName.isEmpty()) {
+                m_recipientNameEnd = m_recipientNameStart + newName.length();
+            } else {
+                m_recipientNameStart = -1;
+                m_recipientNameEnd = -1;
+            }
+        } else if (!newName.isEmpty()) {
+            // No existing position - insert at beginning of header
+            header = newName + header;
+            m_recipientNameStart = 0;
+            m_recipientNameEnd = newName.length();
+        }
+
+        m_letterText = header + rest;
+        m_letterHeader = header;
+        emit letterTextChanged();
+        emit recipientNamePositionChanged();
+    }
+
+    m_recipientName = newName;
     emit recipientInfoChanged();
 
     qDebug() << "Backend::importAddresseeFromSave: Imported"

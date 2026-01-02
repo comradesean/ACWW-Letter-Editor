@@ -435,6 +435,8 @@ ApplicationWindow {
                                                         letterInfoDialog.open()
                                                     } else if (actionId === "importAddressee") {
                                                         backend.importAddresseeFromSave()
+                                                        // Update canvas with new header
+                                                        canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
                                                     } else if (actionId === "nextPaper") {
                                                         if (backend.loaded && paperCombo.currentIndex < 63)
                                                             paperCombo.currentIndex++
