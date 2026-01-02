@@ -38,6 +38,8 @@ void LetterCanvasItem::setText(const QString& text) {
     int firstNewline = text.indexOf('\n');
     int lastNewline = text.lastIndexOf('\n');
 
+    QString oldHeader = m_header;
+
     if (firstNewline < 0) {
         m_header = text;
         m_body = "";
@@ -52,10 +54,22 @@ void LetterCanvasItem::setText(const QString& text) {
         m_footer = text.mid(lastNewline + 1);
     }
 
-    // Clamp cursor to valid position
-    m_cursorPosInSection = qMin(m_cursorPosInSection, sectionText(m_currentSection).length());
+    // Adjust cursor position if header length changed (e.g., recipient name added/changed)
+    if (m_currentSection == 0) {
+        int headerLengthDiff = m_header.length() - oldHeader.length();
+        if (headerLengthDiff != 0) {
+            // Shift cursor by the difference, clamped to valid range
+            m_cursorPosInSection = qBound(0, m_cursorPosInSection + headerLengthDiff, m_header.length());
+        } else {
+            m_cursorPosInSection = qMin(m_cursorPosInSection, m_header.length());
+        }
+    } else {
+        // Clamp cursor to valid position for current section
+        m_cursorPosInSection = qMin(m_cursorPosInSection, sectionText(m_currentSection).length());
+    }
 
     emit textChanged();
+    emit cursorPositionChanged();
     update();
 }
 
@@ -1504,24 +1518,16 @@ void LetterCanvasItem::renderLineWithRecipient(QPainter* painter, const QString&
     int currentX = x;
     bool hasRecipient = (recipientStart >= 0 && recipientEnd >= 0 && recipientEnd <= text.length());
 
-    // Calculate selection positions
+    // Calculate selection positions using actual glyph widths
     int selStartX = -1, selEndX = -1;
     if (selStart >= 0 && selEnd > selStart) {
         selStartX = x;
         for (int i = 0; i < selStart && i < text.length(); i++) {
-            if (hasRecipient && i >= recipientStart && i < recipientEnd) {
-                if (i == recipientStart) selStartX += NAME_TOKEN_WIDTH;
-            } else {
-                selStartX += font.charWidth(text[i]) + GLYPH_SPACING;
-            }
+            selStartX += font.charWidth(text[i]) + GLYPH_SPACING;
         }
         selEndX = selStartX;
         for (int i = selStart; i < selEnd && i < text.length(); i++) {
-            if (hasRecipient && i >= recipientStart && i < recipientEnd) {
-                if (i == selStart || i == recipientStart) selEndX += NAME_TOKEN_WIDTH;
-            } else {
-                selEndX += font.charWidth(text[i]) + GLYPH_SPACING;
-            }
+            selEndX += font.charWidth(text[i]) + GLYPH_SPACING;
         }
         painter->fillRect(selStartX, y, selEndX - selStartX, LINE_HEIGHT, selectionColor);
     }
@@ -1539,15 +1545,11 @@ void LetterCanvasItem::renderLineWithRecipient(QPainter* painter, const QString&
         currentX += font.charWidth(text[i]) + GLYPH_SPACING;
     }
 
-    // Draw cursor
+    // Draw cursor using actual glyph widths
     if (cursorCol >= 0 && cursorCol <= text.length()) {
         int cursorX = x;
         for (int i = 0; i < cursorCol && i < text.length(); i++) {
-            if (hasRecipient && i >= recipientStart && i < recipientEnd) {
-                if (i == recipientStart) cursorX += NAME_TOKEN_WIDTH;
-            } else {
-                cursorX += font.charWidth(text[i]) + GLYPH_SPACING;
-            }
+            cursorX += font.charWidth(text[i]) + GLYPH_SPACING;
         }
         painter->fillRect(cursorX, y, 1, LINE_HEIGHT, textColor);
     }
