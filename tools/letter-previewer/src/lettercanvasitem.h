@@ -14,8 +14,15 @@ class LetterCanvasItem : public QQuickPaintedItem {
     Q_OBJECT
     Q_PROPERTY(Backend* backend READ backend WRITE setBackend NOTIFY backendChanged)
     Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
+    Q_PROPERTY(QString header READ header NOTIFY textChanged)
+    Q_PROPERTY(QString body READ body NOTIFY textChanged)
+    Q_PROPERTY(QString footer READ footer NOTIFY textChanged)
     Q_PROPERTY(int cursorPosition READ cursorPosition WRITE setCursorPosition NOTIFY cursorPositionChanged)
+    Q_PROPERTY(int currentSection READ currentSection NOTIFY currentSectionChanged)
     Q_PROPERTY(bool cursorVisible READ cursorVisible NOTIFY cursorVisibleChanged)
+    Q_PROPERTY(int selectionStart READ selectionStart NOTIFY selectionChanged)
+    Q_PROPERTY(int selectionEnd READ selectionEnd NOTIFY selectionChanged)
+    Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
 
 public:
     explicit LetterCanvasItem(QQuickItem* parent = nullptr);
@@ -25,19 +32,53 @@ public:
     Backend* backend() const { return m_backend; }
     void setBackend(Backend* backend);
 
-    QString text() const { return m_text; }
+    // Combined text for backward compatibility
+    QString text() const;
     void setText(const QString& text);
 
-    int cursorPosition() const { return m_cursorPos; }
+    // Separate field accessors
+    QString header() const { return m_header; }
+    QString body() const { return m_body; }
+    QString footer() const { return m_footer; }
+
+    // Cursor position (global, for backward compatibility)
+    int cursorPosition() const;
     void setCursorPosition(int pos);
 
+    // Current section (0=header, 1=body, 2=footer)
+    int currentSection() const { return m_currentSection; }
+
     bool cursorVisible() const { return m_cursorVisible; }
+
+    // Selection (global positions for backward compatibility)
+    int selectionStart() const;
+    int selectionEnd() const;
+    bool hasSelection() const;
+
+    Q_INVOKABLE void startSelection(qreal x, qreal y);
+    Q_INVOKABLE void updateSelection(qreal x, qreal y);
+    Q_INVOKABLE void clearSelection();
+    Q_INVOKABLE void deleteSelection();
+    Q_INVOKABLE void selectAll();
+    Q_INVOKABLE void extendSelectionLeft();
+    Q_INVOKABLE void extendSelectionRight();
+    Q_INVOKABLE void extendSelectionHome();
+    Q_INVOKABLE void extendSelectionEnd();
+    Q_INVOKABLE void extendSelectionUp();
+    Q_INVOKABLE void extendSelectionDown();
+    Q_INVOKABLE void copySelection();
+    Q_INVOKABLE void cutSelection();
+    Q_INVOKABLE void paste();
 
     Q_INVOKABLE void insertChar(const QString& ch);
     Q_INVOKABLE void backspace();
     Q_INVOKABLE void deleteChar();
     Q_INVOKABLE void moveCursorLeft();
     Q_INVOKABLE void moveCursorRight();
+    Q_INVOKABLE void moveCursorUp();
+    Q_INVOKABLE void moveCursorDown();
+    Q_INVOKABLE void moveCursorHome();
+    Q_INVOKABLE void moveCursorEnd();
     Q_INVOKABLE void newLine();
     Q_INVOKABLE void clearText();
     Q_INVOKABLE void handleClick(qreal x, qreal y);
@@ -48,7 +89,9 @@ signals:
     void backendChanged();
     void textChanged();
     void cursorPositionChanged();
+    void currentSectionChanged();
     void cursorVisibleChanged();
+    void selectionChanged();
     void recipientNameClicked();
 
 private slots:
@@ -59,29 +102,50 @@ private:
     void renderText(QPainter* painter);
     void renderLine(QPainter* painter, const QString& text, int x, int y,
                     int cursorCol, const FontLoader& font, bool rightAlign,
-                    const QColor& textColor);
+                    const QColor& textColor, int selStart = -1, int selEnd = -1,
+                    const QColor& selectionColor = QColor());
     void renderLineWithRecipient(QPainter* painter, const QString& text, int x, int y,
                                   int cursorCol, const FontLoader& font,
                                   const QColor& textColor, const QColor& recipientColor,
-                                  int recipientStart, int recipientEnd);
+                                  int recipientStart, int recipientEnd,
+                                  int selStart = -1, int selEnd = -1,
+                                  const QColor& selectionColor = QColor());
 
-    // Text structure helpers (text = "header\nbody\nfooter")
-    int getSection(int pos) const;  // 0=header, 1=body, 2=footer
-    int getBodyStartPos() const;
-    int getFooterStartPos() const;
-    QString getHeader() const;
-    QString getBody() const;
-    QString getFooter() const;
+    // Section text accessor (returns reference for modification)
+    QString& sectionText(int section);
+    const QString& sectionText(int section) const;
 
-    // Body wrapping - returns (lineText, startPosInBody) pairs
+    // Position conversion helpers
+    int sectionPosToGlobal(int section, int posInSection) const;
+    void globalPosToSection(int globalPos, int& outSection, int& outPosInSection) const;
+
+    // Body helpers
+    int countLogicalBodyLines() const;
     QVector<QPair<QString, int>> wrapBodyText() const;
 
     // Click handling helper
     int findCharPosAtX(const QString& text, int targetX, int startX, const FontLoader& font) const;
 
+    // Convert widget coordinates to section and position
+    void charPosFromPoint(qreal x, qreal y, int& outSection, int& outPosInSection) const;
+
     Backend* m_backend = nullptr;
-    QString m_text;
-    int m_cursorPos = 0;
+
+    // Separate text storage
+    QString m_header;
+    QString m_body;
+    QString m_footer;
+
+    // Section-aware cursor
+    int m_currentSection = 0;      // 0=header, 1=body, 2=footer
+    int m_cursorPosInSection = 0;
+
+    // Section-aware selection (constrained to single section)
+    int m_selectionSection = -1;
+    int m_selectionStartInSection = -1;
+    int m_selectionEndInSection = -1;
+    int m_selectionAnchorInSection = -1;
+
     bool m_cursorVisible = true;
     QTimer m_cursorTimer;
 

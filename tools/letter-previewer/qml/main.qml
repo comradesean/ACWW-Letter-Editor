@@ -684,10 +684,58 @@ ApplicationWindow {
                                 canvas.deleteChar()
                                 event.accepted = true
                             } else if (event.key === Qt.Key_Left) {
-                                canvas.moveCursorLeft()
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionLeft()
+                                } else {
+                                    canvas.moveCursorLeft()
+                                }
                                 event.accepted = true
                             } else if (event.key === Qt.Key_Right) {
-                                canvas.moveCursorRight()
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionRight()
+                                } else {
+                                    canvas.moveCursorRight()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Up) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionUp()
+                                } else {
+                                    canvas.moveCursorUp()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Down) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionDown()
+                                } else {
+                                    canvas.moveCursorDown()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Home) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionHome()
+                                } else {
+                                    canvas.moveCursorHome()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_End) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    canvas.extendSelectionEnd()
+                                } else {
+                                    canvas.moveCursorEnd()
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) {
+                                canvas.selectAll()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
+                                canvas.copySelection()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_X && (event.modifiers & Qt.ControlModifier)) {
+                                canvas.cutSelection()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_V && (event.modifiers & Qt.ControlModifier)) {
+                                canvas.paste()
                                 event.accepted = true
                             } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                                 canvas.newLine()
@@ -778,13 +826,28 @@ ApplicationWindow {
                             }
                         }
 
-                        // Main click handler - on top
+                        // Main click/drag handler - on top
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.IBeamCursor
-                            onClicked: {
-                                canvas.handleClick(mouse.x, mouse.y)
+                            property bool dragging: false
+
+                            onPressed: {
+                                canvas.startSelection(mouse.x, mouse.y)
+                                dragging = true
                                 canvas.forceActiveFocus()
+                            }
+                            onPositionChanged: {
+                                if (dragging) {
+                                    canvas.updateSelection(mouse.x, mouse.y)
+                                }
+                            }
+                            onReleased: {
+                                dragging = false
+                                // If no selection was made (just a click), treat as cursor positioning
+                                if (!canvas.hasSelection) {
+                                    canvas.handleClick(mouse.x, mouse.y)
+                                }
                             }
                         }
                     }
