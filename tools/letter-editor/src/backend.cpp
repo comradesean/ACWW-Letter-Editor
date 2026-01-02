@@ -164,6 +164,9 @@ bool Backend::loadRom(const QUrl& fileUrl) {
         return false;
     }
 
+    // Load cloth texture (optional - continue even if it fails)
+    m_cloth.load(rom);
+
     // Build paper names list using actual stationery names
     m_paperNames.clear();
     for (int i = 0; i < m_stationery.count(); i++) {

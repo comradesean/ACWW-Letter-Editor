@@ -7,6 +7,7 @@
 #include <QVariantList>
 #include "stationery_loader.h"
 #include "font_loader.h"
+#include "cloth_loader.h"
 #include "nds_rom.h"
 #include "savefile.h"
 #include "letter.h"
@@ -114,6 +115,7 @@ public:
     // For canvas rendering
     const StationeryLoader& stationery() const { return m_stationery; }
     const FontLoader& font() const { return m_font; }
+    const ClothLoader& cloth() const { return m_cloth; }
 
 signals:
     void loadedChanged();
@@ -135,6 +137,7 @@ private:
     bool m_loaded = false;
     StationeryLoader m_stationery;
     FontLoader m_font;
+    ClothLoader m_cloth;
     QStringList m_paperNames;
     int m_currentPaper = 0;
     QString m_letterText;

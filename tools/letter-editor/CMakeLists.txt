@@ -19,6 +19,7 @@ set(SOURCES
     src/lettercanvasitem.cpp
     src/stationery_loader.cpp
     src/font_loader.cpp
+    src/cloth_loader.cpp
     src/nds_rom.cpp
     src/lz77.cpp
     src/letter.cpp
@@ -30,6 +31,7 @@ set(HEADERS
     src/lettercanvasitem.h
     src/stationery_loader.h
     src/font_loader.h
+    src/cloth_loader.h
     src/nds_rom.h
     src/lz77.h
     src/letter.h

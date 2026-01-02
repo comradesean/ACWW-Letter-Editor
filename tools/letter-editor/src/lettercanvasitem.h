@@ -97,6 +97,7 @@ signals:
 private slots:
     void toggleCursor();
     void onPaperChanged();
+    void onLoadedChanged();
     void updateBackgroundOffset();
 
 private:

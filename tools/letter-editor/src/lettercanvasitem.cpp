@@ -15,7 +15,8 @@ LetterCanvasItem::LetterCanvasItem(QQuickItem* parent)
     m_cursorTimer.setInterval(500);
     m_cursorTimer.start();
 
-    // Load cloth texture for animated background
+    // Cloth texture will be loaded from backend when ROM is loaded
+    // Fall back to static image initially
     m_clothTexture.load(":/images/cloth.png");
 
     // Set up background animation timer (30fps for smoother feel)
@@ -44,6 +45,11 @@ void LetterCanvasItem::setBackend(Backend* backend) {
         m_backend = backend;
         if (m_backend) {
             connect(m_backend, &Backend::paperChanged, this, &LetterCanvasItem::onPaperChanged);
+            connect(m_backend, &Backend::loadedChanged, this, &LetterCanvasItem::onLoadedChanged);
+            // Update cloth texture if ROM is already loaded
+            if (m_backend->isLoaded() && m_backend->cloth().isLoaded()) {
+                m_clothTexture = m_backend->cloth().getTexture();
+            }
         }
         emit backendChanged();
         update();
@@ -1384,6 +1390,14 @@ void LetterCanvasItem::toggleCursor() {
 }
 
 void LetterCanvasItem::onPaperChanged() {
+    update();
+}
+
+void LetterCanvasItem::onLoadedChanged() {
+    // Update cloth texture when ROM is loaded
+    if (m_backend && m_backend->isLoaded() && m_backend->cloth().isLoaded()) {
+        m_clothTexture = m_backend->cloth().getTexture();
+    }
     update();
 }
 
