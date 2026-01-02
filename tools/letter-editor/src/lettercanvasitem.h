@@ -97,6 +97,7 @@ signals:
 private slots:
     void toggleCursor();
     void onPaperChanged();
+    void updateBackgroundOffset();
 
 private:
     void renderText(QPainter* painter);
@@ -148,6 +149,12 @@ private:
 
     bool m_cursorVisible = true;
     QTimer m_cursorTimer;
+
+    // Animated cloth background
+    QImage m_clothTexture;
+    QTimer m_backgroundTimer;
+    qreal m_bgOffsetX = 0;
+    qreal m_bgOffsetY = 0;
 
     // Use shared constants from letterconstants.h
     static constexpr int HEADER_LEFT = LetterConstants::HEADER_LEFT;

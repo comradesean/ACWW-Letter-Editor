@@ -13,6 +13,26 @@ LetterCanvasItem::LetterCanvasItem(QQuickItem* parent)
     connect(&m_cursorTimer, &QTimer::timeout, this, &LetterCanvasItem::toggleCursor);
     m_cursorTimer.setInterval(500);
     m_cursorTimer.start();
+
+    // Load cloth texture for animated background
+    m_clothTexture.load(":/images/cloth.png");
+
+    // Set up background animation timer (60fps-ish for smooth scrolling)
+    connect(&m_backgroundTimer, &QTimer::timeout, this, &LetterCanvasItem::updateBackgroundOffset);
+    m_backgroundTimer.setInterval(16);  // ~60fps
+    m_backgroundTimer.start();
+}
+
+void LetterCanvasItem::updateBackgroundOffset() {
+    // Move up and to the left at about 10 pixels per second
+    m_bgOffsetX -= 0.16;
+    m_bgOffsetY -= 0.16;
+
+    // Wrap around when we've moved one tile width
+    if (m_bgOffsetX <= -32) m_bgOffsetX += 32;
+    if (m_bgOffsetY <= -32) m_bgOffsetY += 32;
+
+    update();
 }
 
 void LetterCanvasItem::setBackend(Backend* backend) {
@@ -1380,6 +1400,21 @@ void LetterCanvasItem::paint(QPainter* painter) {
 
     painter->translate(offsetX, offsetY);
     painter->scale(scale, scale);
+
+    // Draw animated tiled cloth background behind the paper
+    if (!m_clothTexture.isNull()) {
+        int texW = m_clothTexture.width();
+        int texH = m_clothTexture.height();
+        int startX = static_cast<int>(m_bgOffsetX);
+        int startY = static_cast<int>(m_bgOffsetY);
+
+        // Tile the texture across the 256x192 canvas
+        for (int y = startY; y < 192; y += texH) {
+            for (int x = startX; x < 256; x += texW) {
+                painter->drawImage(x, y, m_clothTexture);
+            }
+        }
+    }
 
     if (m_backend && m_backend->isLoaded()) {
         QImage paperImage = m_backend->getPaperImage(m_backend->currentPaper());
