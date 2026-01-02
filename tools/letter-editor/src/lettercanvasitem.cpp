@@ -1,6 +1,7 @@
 #include "lettercanvasitem.h"
 #include "backend.h"
 #include <QPainter>
+#include <QPainterPath>
 #include <QGuiApplication>
 #include <QClipboard>
 
@@ -17,16 +18,16 @@ LetterCanvasItem::LetterCanvasItem(QQuickItem* parent)
     // Load cloth texture for animated background
     m_clothTexture.load(":/images/cloth.png");
 
-    // Set up background animation timer (60fps-ish for smooth scrolling)
+    // Set up background animation timer (30fps for smoother feel)
     connect(&m_backgroundTimer, &QTimer::timeout, this, &LetterCanvasItem::updateBackgroundOffset);
-    m_backgroundTimer.setInterval(16);  // ~60fps
+    m_backgroundTimer.setInterval(33);  // ~30fps
     m_backgroundTimer.start();
 }
 
 void LetterCanvasItem::updateBackgroundOffset() {
     // Move up and to the left at about 10 pixels per second
-    m_bgOffsetX -= 0.16;
-    m_bgOffsetY -= 0.16;
+    m_bgOffsetX -= 0.33;
+    m_bgOffsetY -= 0.33;
 
     // Wrap around when we've moved one tile width
     if (m_bgOffsetX <= -32) m_bgOffsetX += 32;
@@ -1400,6 +1401,11 @@ void LetterCanvasItem::paint(QPainter* painter) {
 
     painter->translate(offsetX, offsetY);
     painter->scale(scale, scale);
+
+    // Clip to rounded rectangle to match the frame
+    QPainterPath clipPath;
+    clipPath.addRoundedRect(QRectF(0, 0, 256, 192), 6, 6);
+    painter->setClipPath(clipPath);
 
     // Draw animated tiled cloth background behind the paper
     if (!m_clothTexture.isNull()) {
