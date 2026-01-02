@@ -16,23 +16,23 @@ LetterCanvasItem::LetterCanvasItem(QQuickItem* parent)
     m_cursorTimer.start();
 
     // Cloth texture will be loaded from backend when ROM is loaded
-    // Fall back to static image initially
-    m_clothTexture.load(":/images/cloth.png");
+    // Until then, m_clothTexture remains null and no background is drawn
 
-    // Set up background animation timer (30fps for smoother feel)
+    // Set up background animation timer
     connect(&m_backgroundTimer, &QTimer::timeout, this, &LetterCanvasItem::updateBackgroundOffset);
-    m_backgroundTimer.setInterval(33);  // ~30fps
+    m_backgroundTimer.setInterval(16);  // ~60fps for smooth sub-pixel animation
     m_backgroundTimer.start();
 }
 
 void LetterCanvasItem::updateBackgroundOffset() {
-    // Move up and to the left at about 10 pixels per second
-    m_bgOffsetX -= 0.33;
-    m_bgOffsetY -= 0.33;
+    // Move up and to the left at about 12 pixels per second
+    // At 60fps, 0.2 pixels/frame gives smooth sub-pixel movement
+    m_bgOffsetX -= 0.2;
+    m_bgOffsetY -= 0.2;
 
     // Wrap around when we've moved one tile width
-    if (m_bgOffsetX <= -32) m_bgOffsetX += 32;
-    if (m_bgOffsetY <= -32) m_bgOffsetY += 32;
+    if (m_bgOffsetX <= -32.0) m_bgOffsetX += 32.0;
+    if (m_bgOffsetY <= -32.0) m_bgOffsetY += 32.0;
 
     update();
 }
@@ -1423,17 +1423,20 @@ void LetterCanvasItem::paint(QPainter* painter) {
 
     // Draw animated tiled cloth background behind the paper
     if (!m_clothTexture.isNull()) {
-        int texW = m_clothTexture.width();
-        int texH = m_clothTexture.height();
-        int startX = static_cast<int>(m_bgOffsetX);
-        int startY = static_cast<int>(m_bgOffsetY);
+        qreal texW = m_clothTexture.width();
+        qreal texH = m_clothTexture.height();
 
-        // Tile the texture across the 256x192 canvas
-        for (int y = startY; y < 192; y += texH) {
-            for (int x = startX; x < 256; x += texW) {
-                painter->drawImage(x, y, m_clothTexture);
+        // Enable smooth pixmap transform for sub-pixel rendering
+        painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+        // Tile the texture across the 256x192 canvas using floating-point positions
+        for (qreal y = m_bgOffsetY; y < 192.0; y += texH) {
+            for (qreal x = m_bgOffsetX; x < 256.0; x += texW) {
+                painter->drawImage(QPointF(x, y), m_clothTexture);
             }
         }
+
+        painter->setRenderHint(QPainter::SmoothPixmapTransform, false);
     }
 
     if (m_backend && m_backend->isLoaded()) {

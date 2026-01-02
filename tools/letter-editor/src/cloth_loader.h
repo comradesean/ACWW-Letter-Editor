@@ -19,7 +19,7 @@ public:
 private:
     bool parseNSBTX(const std::vector<uint8_t>& data);
     QImage decodeTexture(const std::vector<uint8_t>& texData, int width, int height,
-                         const std::vector<uint8_t>& palData);
+                         const std::vector<uint8_t>& palData, int format);
 
     QImage m_texture;
     bool m_loaded = false;

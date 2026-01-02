@@ -31,7 +31,7 @@ bool ClothLoader::load(NDSRom& rom) {
     m_loaded = false;
     m_texture = QImage();
 
-    // Load cloth082.nsbtx from ROM
+    // Load cloth texture from ROM
     std::string clothPath = "/cloth/5/cloth082.nsbtx";
     auto data = rom.readFile(clothPath);
 
@@ -61,18 +61,17 @@ bool ClothLoader::parseNSBTX(const std::vector<uint8_t>& data) {
         return false;
     }
 
-    // Check BTX0 magic at offset 0x00
+    // Check BTX0 magic
     if (data[0] != 'B' || data[1] != 'T' || data[2] != 'X' || data[3] != '0') {
         return false;
     }
 
-    // Read section count at 0x0E
+    // Read section count and TEX0 offset
     uint16_t sectionCount = readU16LE(&data[0x0E]);
     if (sectionCount < 1) {
         return false;
     }
 
-    // Read TEX0 offset at 0x10
     uint32_t tex0Offset = readU32LE(&data[0x10]);
     if (tex0Offset >= data.size()) {
         return false;
@@ -87,115 +86,58 @@ bool ClothLoader::parseNSBTX(const std::vector<uint8_t>& data) {
         return false;
     }
 
-    // TEX0 structure:
-    // 0x00: Magic "TEX0"
-    // 0x04: Section size
-    // 0x08: Padding
-    // 0x0C: Texture data size (shifted by 3)
-    // 0x10: Texture info offset (relative to TEX0 section start)
-    // 0x14: Padding
-    // 0x18: Texture data offset (relative to TEX0 section start)
-    // 0x1C: Padding
-    // 0x20: Compressed texture data size (shifted by 3)
-    // 0x24: Compressed texture info offset
-    // 0x28: Padding
-    // 0x2C: Compressed texture data offset
-    // 0x30: Padding
-    // 0x34: Palette data size (shifted by 3)
-    // 0x38: Palette info dict offset
-    // 0x3C: Palette data offset
+    // Read TEX0 header offsets
+    uint16_t texInfoOffset = readU16LE(&tex0[0x0E]);
+    uint32_t texDataOffset = readU32LE(&tex0[0x14]);
+    uint32_t palInfoOffset = readU32LE(&tex0[0x20]);
+    uint32_t palDataOffset = readU32LE(&tex0[0x24]);
 
-    uint32_t texInfoOffset = readU32LE(&tex0[0x10]);
-    uint32_t texDataOffset = readU32LE(&tex0[0x18]);
-    uint32_t palInfoOffset = readU32LE(&tex0[0x38]);
-    uint32_t palDataOffset = readU32LE(&tex0[0x3C]);
-
-    // Validate offsets
-    if (texInfoOffset >= tex0Size || texDataOffset >= tex0Size ||
-        palInfoOffset >= tex0Size || palDataOffset >= tex0Size) {
+    // Validate offsets (palInfoOffset can be 0 if no palette dictionary)
+    if (texInfoOffset >= tex0Size || texDataOffset >= tex0Size || palDataOffset >= tex0Size) {
+        return false;
+    }
+    if (palInfoOffset != 0 && palInfoOffset >= tex0Size) {
         return false;
     }
 
-    // Parse texture dictionary to get texture info
-    // Dictionary structure:
-    // 0x00: Dummy
-    // 0x01: Number of textures
-    // 0x02-0x03: Size of dictionary (in 2-byte units)
-    // Then entries follow
-
+    // Parse texture dictionary
     const uint8_t* texInfo = &tex0[texInfoOffset];
     uint8_t numTextures = texInfo[1];
     if (numTextures < 1) {
         return false;
     }
 
-    // Dictionary header is 8 bytes, then we have section data
-    // After the header, each entry has:
-    // - 4 bytes: offset/size data
-    // - For texture: params at entry data offset
+    // Calculate offset to data entries in dictionary
+    // Structure: info header (4) + dict header (4) + tree nodes ((n+2)*4)
+    int treeSize = (numTextures + 2) * 4;
+    int dataEntriesOffset = 4 + 4 + treeSize;
 
-    // Skip dictionary header (8 bytes)
-    // The actual texture parameters are at the data portion after the dictionary
-    // Format: offset at [headerSize + entryIdx * 4], params are stored in entry data
-
-    uint16_t dictSize = readU16LE(&texInfo[2]);
-
-    // Find first texture's parameters
-    // Dictionary layout: header (8 bytes) + entry data (4 bytes per entry) + section for each entry
-    // The params are stored as: offset (2 bytes) + params (2 bytes) at entry data start + 0
-
-    // Simplified parsing - look for texture params after dictionary header
-    // Entry 0 data starts at offset 8 in the dictionary
-    // Each entry is 4 bytes, then names follow
-
-    if (texInfoOffset + 8 + 4 > tex0Size) {
+    if (texInfoOffset + dataEntriesOffset + 8 > tex0Size) {
         return false;
     }
 
-    // Read texture params from first entry
-    // In the dictionary, after the 8-byte header, each entry has 4 bytes of data
-    // bytes 0-1: offset to texture data / 8
-    // bytes 2-3: params containing format, width, height
+    // Read texture params from first data entry
+    uint16_t texOffset = readU16LE(&texInfo[dataEntriesOffset]);
+    uint16_t params = readU16LE(&texInfo[dataEntriesOffset + 2]);
 
-    uint16_t texOffset = readU16LE(&texInfo[8]);
-    uint16_t params = readU16LE(&texInfo[10]);
-
-    // Extract dimensions from params
-    // params format:
-    // bits 0-3: repeat mode
-    // bits 4-6: width exponent (actual = 8 << exp)
-    // bits 7-9: height exponent
-    // bits 10-12: format
-    // bits 13-15: other flags
-
-    int widthExp = (params >> 4) & 7;
-    int heightExp = (params >> 7) & 7;
+    // Decode params: format (bits 10-12), width (bits 4-6), height (bits 7-9)
     int format = (params >> 10) & 7;
+    int width = 8 << ((params >> 4) & 7);
+    int height = 8 << ((params >> 7) & 7);
 
-    int width = 8 << widthExp;
-    int height = 8 << heightExp;
-
-    // Format 4 = Palette256 (8 bits per pixel, 256 color palette)
-    // Format 5 = 4x4 compressed
-    // Format 3 = Palette16 (4 bits per pixel)
-    // Format 2 = Palette4 (2 bits per pixel)
-
-    if (format != 4) {
-        // We only support Palette256 format for now
-        // Try to handle it anyway for other formats
-        if (format != 3 && format != 2) {
-            return false;
-        }
+    // Only support paletted formats
+    if (format != 4 && format != 3 && format != 2) {
+        return false;
     }
 
-    // Calculate texture data size
+    // Calculate texture data size based on format
     int texDataSize = 0;
     if (format == 4) {
-        texDataSize = width * height;  // 1 byte per pixel
+        texDataSize = width * height;       // Palette256: 8bpp
     } else if (format == 3) {
-        texDataSize = (width * height) / 2;  // 4 bits per pixel
+        texDataSize = (width * height) / 2; // Palette16: 4bpp
     } else if (format == 2) {
-        texDataSize = (width * height) / 4;  // 2 bits per pixel
+        texDataSize = (width * height) / 4; // Palette4: 2bpp
     }
 
     // Extract texture data
@@ -203,46 +145,43 @@ bool ClothLoader::parseNSBTX(const std::vector<uint8_t>& data) {
     if (actualTexOffset + texDataSize > tex0Size) {
         return false;
     }
-
     std::vector<uint8_t> texData(&tex0[actualTexOffset], &tex0[actualTexOffset + texDataSize]);
 
-    // Parse palette dictionary to get palette data
-    const uint8_t* palInfo = &tex0[palInfoOffset];
-    uint8_t numPalettes = palInfo[1];
-    if (numPalettes < 1) {
-        return false;
+    // Get palette offset
+    uint32_t actualPalOffset;
+    if (palInfoOffset == 0) {
+        // No palette dictionary - use direct offset
+        actualPalOffset = palDataOffset;
+    } else {
+        // Parse palette dictionary
+        const uint8_t* palInfo = &tex0[palInfoOffset];
+        uint8_t numPalettes = palInfo[1];
+        if (numPalettes < 1) {
+            return false;
+        }
+
+        int palTreeSize = (numPalettes + 2) * 4;
+        int palDataEntriesOffset = 4 + 4 + palTreeSize;
+        uint16_t palOffset = readU16LE(&palInfo[palDataEntriesOffset]);
+        actualPalOffset = palDataOffset + (palOffset * 8);
     }
 
-    // Read first palette offset
-    uint16_t palOffset = readU16LE(&palInfo[8]);
+    // Calculate palette size
+    int numColors = (format == 4) ? 256 : (format == 3) ? 16 : 4;
+    int palDataSize = numColors * 2;
 
-    // Calculate palette size based on format
-    int numColors = 0;
-    if (format == 4) {
-        numColors = 256;
-    } else if (format == 3) {
-        numColors = 16;
-    } else if (format == 2) {
-        numColors = 4;
-    }
-
-    int palDataSize = numColors * 2;  // RGB555 = 2 bytes per color
-
-    uint32_t actualPalOffset = palDataOffset + (palOffset * 8);
     if (actualPalOffset + palDataSize > tex0Size) {
         return false;
     }
-
     std::vector<uint8_t> palData(&tex0[actualPalOffset], &tex0[actualPalOffset + palDataSize]);
 
-    // Decode texture with palette
-    m_texture = decodeTexture(texData, width, height, palData);
-
+    // Decode texture
+    m_texture = decodeTexture(texData, width, height, palData, format);
     return !m_texture.isNull();
 }
 
 QImage ClothLoader::decodeTexture(const std::vector<uint8_t>& texData, int width, int height,
-                                   const std::vector<uint8_t>& palData) {
+                                   const std::vector<uint8_t>& palData, int format) {
     QImage image(width, height, QImage::Format_ARGB32);
     image.fill(Qt::transparent);
 
@@ -258,18 +197,39 @@ QImage ClothLoader::decodeTexture(const std::vector<uint8_t>& texData, int width
         }
     }
 
-    // Decode texture (Palette256 format - 1 byte per pixel)
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            int pixelIdx = y * width + x;
-            if (pixelIdx >= static_cast<int>(texData.size())) {
-                continue;
-            }
+    if (format == 3) {
+        // Palette16 format - 4 bits per pixel (2 pixels per byte)
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixelIdx = y * width + x;
+                int byteIdx = pixelIdx / 2;
+                if (byteIdx >= static_cast<int>(texData.size())) {
+                    continue;
+                }
 
-            uint8_t colorIdx = texData[pixelIdx];
-            if (colorIdx < palette.size()) {
-                const Color& c = palette[colorIdx];
-                image.setPixelColor(x, y, QColor(c.r, c.g, c.b, c.a));
+                uint8_t byte = texData[byteIdx];
+                // Lower nibble is first pixel, upper nibble is second pixel
+                uint8_t colorIdx = (pixelIdx % 2 == 0) ? (byte & 0x0F) : ((byte >> 4) & 0x0F);
+                if (colorIdx < palette.size()) {
+                    const Color& c = palette[colorIdx];
+                    image.setPixelColor(x, y, QColor(c.r, c.g, c.b, c.a));
+                }
+            }
+        }
+    } else {
+        // Palette256 format - 1 byte per pixel (and fallback for other formats)
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixelIdx = y * width + x;
+                if (pixelIdx >= static_cast<int>(texData.size())) {
+                    continue;
+                }
+
+                uint8_t colorIdx = texData[pixelIdx];
+                if (colorIdx < palette.size()) {
+                    const Color& c = palette[colorIdx];
+                    image.setPixelColor(x, y, QColor(c.r, c.g, c.b, c.a));
+                }
             }
         }
     }
