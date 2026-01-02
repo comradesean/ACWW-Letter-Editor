@@ -258,8 +258,10 @@ The TEX0 section contains texture and palette data.
 | 0x18 | 4 | Padding/Reserved |
 | 0x1C | 2 | Palette data size >> 3 |
 | 0x1E | 2 | Padding/Reserved |
-| 0x20 | 4 | Palette info offset (relative to TEX0) |
+| 0x20 | 4 | Palette info offset (relative to TEX0, 0 = no dictionary) |
 | 0x24 | 4 | Palette data offset (relative to TEX0) |
+
+**Note**: When palette info offset is 0, there is no palette dictionary. The palette data is accessed directly at `palDataOffset` without dictionary lookup.
 
 ### 3.3 3D Info / Dictionary Structure
 
@@ -283,9 +285,19 @@ Both texture and palette info sections use the same dictionary structure.
 
 The dictionary contains a Patricia tree for fast name lookups, followed by data entries.
 
+#### Patricia Tree
+
+The Patricia tree has `(numEntries + 2)` nodes, each 4 bytes. This is used for efficient name lookups but can be skipped when reading entries sequentially.
+
+**Data entries offset calculation:**
+```
+dataEntriesOffset = infoHeader(4) + dictHeader(4) + treeNodes((n+2) * 4)
+                  = 8 + (numEntries + 2) * 4
+```
+
 ### 3.4 Texture Data Entry (8 bytes per texture)
 
-Data entries start at: `dictOffset + dictSize`
+Data entries start at the calculated offset above (typically 0x14 for 1 entry, 0x18 for 2, etc.)
 
 | Offset | Size | Description |
 |--------|------|-------------|
@@ -735,30 +747,13 @@ ACWW stores cloth/fabric textures used for UI backgrounds in the `/cloth/` direc
 
 ### 7.2 Cloth NSBTX Format
 
-Cloth textures use the standard BTX0/NSBTX format with TEX0 sections, but with an extended header layout.
+Cloth textures use the standard BTX0/NSBTX format with TEX0 sections (see Section 3). The file is LZ77 compressed in the ROM.
 
-#### Extended TEX0 Header (0x40 bytes)
-
-| Offset | Size | Description |
-|--------|------|-------------|
-| 0x00 | 4 | Magic "TEX0" (ASCII) |
-| 0x04 | 4 | Section size |
-| 0x08 | 4 | Padding/Reserved |
-| 0x0C | 4 | Texture data size >> 3 |
-| 0x10 | 4 | Texture info offset (relative to TEX0) |
-| 0x14 | 4 | Padding/Reserved |
-| 0x18 | 4 | Texture data offset (relative to TEX0) |
-| 0x1C | 4 | Padding/Reserved |
-| 0x20 | 4 | Compressed texture data size >> 3 |
-| 0x24 | 4 | Compressed texture info offset |
-| 0x28 | 4 | Padding/Reserved |
-| 0x2C | 4 | Compressed texture data offset |
-| 0x30 | 4 | Padding/Reserved |
-| 0x34 | 4 | Palette data size >> 3 |
-| 0x38 | 4 | Palette info dict offset (relative to TEX0) |
-| 0x3C | 4 | Palette data offset (relative to TEX0) |
-
-**Note**: This differs from the standard TEX0 header (Section 3.2) which is 0x28 bytes. The extended header adds fields for compressed texture data at offsets 0x20-0x30.
+Key characteristics of `cloth082.nsbtx`:
+- Compressed size: 256 bytes
+- Decompressed size: 708 bytes
+- Uses standard TEX0 header (0x28 bytes, see Section 3.2)
+- Palette info offset is 0 (no palette dictionary)
 
 ### 7.3 Texture/Palette Offset Calculation
 
@@ -773,10 +768,11 @@ This is because offsets are stored right-shifted by 3 bits to save space.
 ### 7.4 Cloth Texture Properties
 
 The cloth texture used in the letter editor (`cloth082.nsbtx`) has:
-- **Format**: Palette256 (8 bits per pixel)
+- **Format**: Palette16 (4 bits per pixel)
 - **Dimensions**: 32×32 pixels
-- **Palette**: 256 colors, RGB555 format
+- **Palette**: 16 colors, RGB555 format
 - **Color 0**: Transparent
+- **Palette info offset**: 0 (no dictionary, direct palette access)
 
 ---
 
@@ -820,11 +816,15 @@ The cloth texture used in the letter editor (`cloth082.nsbtx`) has:
 | 6 | A5I3 | 8 | 8 colors |
 | 7 | Direct | 16 | N/A |
 
-### Extended TEX0 Key Offsets (cloth files)
+### Dictionary Data Entry Offset
 
-| Purpose | Offset | Size |
-|---------|--------|------|
-| Texture Info Offset | 0x10 | 4 |
-| Texture Data Offset | 0x18 | 4 |
-| Palette Info Offset | 0x38 | 4 |
-| Palette Data Offset | 0x3C | 4 |
+For n entries, data entries start at offset:
+```
+8 + (n + 2) * 4
+```
+
+| Entries | Offset |
+|---------|--------|
+| 1 | 0x14 (20) |
+| 2 | 0x18 (24) |
+| 3 | 0x1C (28) |
