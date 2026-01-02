@@ -73,31 +73,32 @@ static const char* acwwCharTable[256] = {
 };
 
 // LTR file format constants (EUR/USA)
+// First 4 bytes are header (zeros), data starts at 0x04
 static const int LTR_FILE_SIZE = 0xF4;        // 244 bytes
 
-// Receiver (To) field - 0x00-0x13 (20 bytes)
-static const int LTR_TO_TOWN_ID_OFFSET = 0x00;     // 2 bytes (uint16)
-static const int LTR_TO_TOWN_OFFSET = 0x02;        // 8 bytes (town name)
-static const int LTR_TO_PLAYER_ID_OFFSET = 0x0A;   // 2 bytes (uint16)
-static const int LTR_TO_NAME_OFFSET = 0x0C;        // 8 bytes (player name)
+// Receiver (To) field - 0x04-0x17 (20 bytes)
+static const int LTR_TO_TOWN_ID_OFFSET = 0x04;     // 2 bytes (uint16)
+static const int LTR_TO_TOWN_OFFSET = 0x06;        // 8 bytes (town name)
+static const int LTR_TO_PLAYER_ID_OFFSET = 0x0E;   // 2 bytes (uint16)
+static const int LTR_TO_NAME_OFFSET = 0x10;        // 8 bytes (player name)
 
-// Sender (From) field - 0x18-0x2B (20 bytes)
-static const int LTR_FROM_TOWN_ID_OFFSET = 0x18;   // 2 bytes (uint16)
-static const int LTR_FROM_TOWN_OFFSET = 0x1A;      // 8 bytes (town name)
-static const int LTR_FROM_PLAYER_ID_OFFSET = 0x22; // 2 bytes (uint16)
-static const int LTR_FROM_NAME_OFFSET = 0x24;      // 8 bytes (player name)
+// Sender (From) field - 0x1C-0x2F (20 bytes)
+static const int LTR_FROM_TOWN_ID_OFFSET = 0x1C;   // 2 bytes (uint16)
+static const int LTR_FROM_TOWN_OFFSET = 0x1E;      // 8 bytes (town name)
+static const int LTR_FROM_PLAYER_ID_OFFSET = 0x26; // 2 bytes (uint16)
+static const int LTR_FROM_NAME_OFFSET = 0x28;      // 8 bytes (player name)
 
 // Letter content
-static const int LTR_SUBJECT_OFFSET = 0x30;   // Greeting/subject template
-static const int LTR_SUBJECT_SIZE = 0x10;     // 16 bytes
-static const int LTR_BODY_OFFSET = 0x48;      // Letter body
-static const int LTR_BODY_SIZE = 0x64;        // 100 bytes
-static const int LTR_SIGNATURE_OFFSET = 0xC8; // Signature/ending
-static const int LTR_SIGNATURE_SIZE = 0x1A;   // 26 bytes
+static const int LTR_SUBJECT_OFFSET = 0x34;   // Greeting/subject template
+static const int LTR_SUBJECT_SIZE = 0x18;     // 24 bytes
+static const int LTR_BODY_OFFSET = 0x4C;      // Letter body
+static const int LTR_BODY_SIZE = 0x80;        // 128 bytes
+static const int LTR_SIGNATURE_OFFSET = 0xCC; // Signature/ending
+static const int LTR_SIGNATURE_SIZE = 0x20;   // 32 bytes
 
 // Metadata
-static const int LTR_NAME_POS_OFFSET = 0xE8;  // 1 byte - position to insert name in greeting
-static const int LTR_PAPER_OFFSET = 0xE9;     // 1 byte
+static const int LTR_NAME_POS_OFFSET = 0xEC;  // 1 byte - position to insert name in greeting
+static const int LTR_PAPER_OFFSET = 0xED;     // 1 byte
 
 // Decode ACWW bytes to QString
 static QString decodeAcwwText(const QByteArray& data) {
@@ -752,6 +753,10 @@ bool Backend::loadSave(const QUrl& fileUrl) {
     // Connect save file signals
     connect(&m_saveFile, &SaveFile::modifiedChanged, this, &Backend::saveModifiedChanged);
 
+    // Load slot 1 (index 0) by default BEFORE emitting signals
+    // so QML handlers see the loaded letter data
+    loadCurrentSlot();
+
     emit saveLoadedChanged();
     emit currentPlayerChanged();
     emit currentStorageTypeChanged();
@@ -772,6 +777,28 @@ bool Backend::saveSave(const QUrl& fileUrl) {
     emit saveModifiedChanged();
     qDebug() << "Backend::saveSave: Saved to:" << (path.isEmpty() ? m_saveFile.filePath() : path);
     return true;
+}
+
+void Backend::closeSave() {
+    if (!m_saveFile.isLoaded()) {
+        return;
+    }
+
+    m_saveFile.close();
+    m_currentPlayer = 0;
+    m_currentStorageType = 0;
+    m_currentSlot = 0;
+
+    // Clear letter info
+    clearLetter();
+
+    emit saveLoadedChanged();
+    emit saveModifiedChanged();
+    emit currentPlayerChanged();
+    emit currentStorageTypeChanged();
+    emit currentSlotChanged();
+
+    qDebug() << "Backend::closeSave: Save file closed";
 }
 
 void Backend::loadCurrentSlot() {
@@ -954,4 +981,11 @@ void Backend::importAddresseeFromSave() {
     qDebug() << "Backend::importAddresseeFromSave: Imported"
              << m_recipientName << "from" << m_recipientTown
              << "(Player ID:" << m_recipientPlayerId << ", Town ID:" << m_recipientTownId << ")";
+}
+
+bool Backend::playerExists(int player) const {
+    if (!m_saveFile.isLoaded()) {
+        return false;
+    }
+    return m_saveFile.playerExists(player);
 }

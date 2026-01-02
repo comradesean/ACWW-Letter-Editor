@@ -6,12 +6,14 @@ import QtQuick.Dialogs 1.3
 import QtGraphicalEffects 1.15
 import QtQuick.Window 2.15
 import LetterPreviewer 1.0
+import "components"
+import "dialogs"
 
 ApplicationWindow {
     id: window
     visible: true
-    width: 620
-    height: 580
+    width: 900
+    height: 720
     minimumWidth: 580
     minimumHeight: 520
     title: "Letter Previewer"
@@ -25,10 +27,65 @@ ApplicationWindow {
     readonly property color bgActive: "#3B4963"
     readonly property color accentPrimary: "#38BDF8"
     readonly property color accentGreen: "#2DD4BF"
+    readonly property color warningColor: "#F59E0B"
+    readonly property color errorColor: "#EF4444"
     readonly property color textPrimary: "#F1F5F9"
     readonly property color textSecondary: "#94A3B8"
     readonly property color textMuted: "#64748B"
     readonly property color divider: "#1E293B"
+
+    // Dirty state tracking for letter edits
+    QtObject {
+        id: dirtyState
+        property bool letterModified: false
+        property string cleanHeader: ""
+        property string cleanBody: ""
+        property string cleanFooter: ""
+        property int cleanPaper: 0
+
+        function capture() {
+            cleanHeader = canvas.header
+            cleanBody = canvas.body
+            cleanFooter = canvas.footer
+            cleanPaper = backend.currentPaper
+            letterModified = false
+        }
+
+        function check() {
+            letterModified = (canvas.header !== cleanHeader) ||
+                           (canvas.body !== cleanBody) ||
+                           (canvas.footer !== cleanFooter) ||
+                           (backend.currentPaper !== cleanPaper)
+        }
+
+        function confirmDiscard(callback) {
+            if (letterModified) {
+                pendingAction = callback
+                unsavedChangesDialog.open()
+            } else {
+                callback()
+            }
+        }
+    }
+
+    property var pendingAction: null
+
+    // Close save file with dirty check
+    function closeSaveFile() {
+        if (backend.saveModified || dirtyState.letterModified) {
+            dirtyState.check()
+            pendingAction = function() {
+                backend.closeSave()
+                dirtyState.capture()
+                canvas.forceActiveFocus()
+            }
+            unsavedChangesDialog.open()
+        } else {
+            backend.closeSave()
+            dirtyState.capture()
+            canvas.forceActiveFocus()
+        }
+    }
 
     Material.theme: Material.Dark
     Material.accent: accentPrimary
@@ -38,7 +95,7 @@ ApplicationWindow {
 
     // Manual maximize state (more reliable for frameless windows)
     property bool isMaximized: false
-    property rect normalGeometry: Qt.rect(100, 100, 620, 580)
+    property rect normalGeometry: Qt.rect(100, 100, 900, 720)
 
     function toggleMaximize() {
         if (isMaximized) {
@@ -62,6 +119,24 @@ ApplicationWindow {
 
     Backend {
         id: backend
+    }
+
+    // Handle save file loading/closing - update canvas
+    Connections {
+        target: backend
+        function onSaveLoadedChanged() {
+            if (backend.saveLoaded) {
+                // Load slot 1 content into canvas
+                canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                paperCombo.currentIndex = backend.currentPaper
+                dirtyState.capture()
+            } else {
+                // Clear canvas when save is closed
+                canvas.clearText()
+                paperCombo.currentIndex = 0
+                dirtyState.capture()
+            }
+        }
     }
 
     // Main container with rounded corners
@@ -270,6 +345,7 @@ ApplicationWindow {
                             { title: "File", items: [
                                 { text: "Open ROM...", shortcut: "Ctrl+O", actionId: "openRom", disabledWhen: "loaded" },
                                 { text: "Open Save File...", shortcut: "Ctrl+Shift+O", actionId: "openSave", enabledWhen: "loaded" },
+                                { text: "Close Save File", shortcut: "Ctrl+W", actionId: "closeSave", enabledWhen: "saveLoaded" },
                                 { separator: true },
                                 { text: "Save", shortcut: "Ctrl+S", actionId: "saveSave", enabledWhen: "saveLoaded" },
                                 { text: "Save As...", shortcut: "Ctrl+Shift+S", actionId: "saveAs", enabledWhen: "saveLoaded" },
@@ -396,6 +472,8 @@ ApplicationWindow {
                                                         fileDialog.open()
                                                     } else if (actionId === "openSave") {
                                                         openSaveDialog.open()
+                                                    } else if (actionId === "closeSave") {
+                                                        closeSaveFile()
                                                     } else if (actionId === "saveSave") {
                                                         backend.saveSave()
                                                     } else if (actionId === "saveAs") {
@@ -465,171 +543,6 @@ ApplicationWindow {
                 }
             }
 
-            // Toolbar
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 52
-                color: bgBase
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 20
-                    anchors.rightMargin: 20
-                    spacing: 16
-
-                    Row {
-                        spacing: 10
-
-                        Label {
-                            text: "Stationery"
-                            font.pixelSize: 12
-                            font.weight: Font.Medium
-                            color: textMuted
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                        ComboBox {
-                            id: paperCombo
-                            width: 160
-                            model: backend.paperNames
-                            enabled: backend.loaded
-                            currentIndex: backend.currentPaper
-                            font.pixelSize: 13
-
-                            onCurrentIndexChanged: {
-                                if (backend.loaded) {
-                                    backend.currentPaper = currentIndex
-                                }
-                            }
-
-                            delegate: ItemDelegate {
-                                width: paperCombo.width
-                                height: 34
-
-                                contentItem: Text {
-                                    text: modelData
-                                    color: highlighted ? textPrimary : textSecondary
-                                    font.pixelSize: 13
-                                    verticalAlignment: Text.AlignVCenter
-                                    leftPadding: 10
-                                }
-
-                                background: Rectangle {
-                                    color: highlighted ? bgHover : "transparent"
-                                    radius: 4
-
-                                    Behavior on color { ColorAnimation { duration: 80 } }
-                                }
-
-                                highlighted: paperCombo.highlightedIndex === index
-                            }
-
-                            indicator: Canvas {
-                                x: paperCombo.width - width - 10
-                                y: (paperCombo.height - height) / 2
-                                width: 10
-                                height: 6
-
-                                onPaint: {
-                                    var ctx = getContext("2d")
-                                    ctx.reset()
-                                    ctx.fillStyle = textMuted
-                                    ctx.moveTo(0, 0)
-                                    ctx.lineTo(width, 0)
-                                    ctx.lineTo(width / 2, height)
-                                    ctx.closePath()
-                                    ctx.fill()
-                                }
-                            }
-
-                            contentItem: Text {
-                                leftPadding: 12
-                                rightPadding: 28
-                                text: paperCombo.displayText
-                                font.pixelSize: 13
-                                color: paperCombo.enabled ? textPrimary : textMuted
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
-
-                            background: Rectangle {
-                                implicitHeight: 34
-                                radius: 8
-                                color: paperCombo.down ? bgActive : (paperCombo.hovered ? bgHover : bgElevated)
-
-                                Behavior on color { ColorAnimation { duration: 80 } }
-                            }
-
-                            popup: Popup {
-                                y: paperCombo.height + 6
-                                width: paperCombo.width
-                                implicitHeight: Math.min(contentItem.implicitHeight + 12, 280)
-                                padding: 6
-
-                                contentItem: ListView {
-                                    clip: true
-                                    implicitHeight: contentHeight
-                                    model: paperCombo.popup.visible ? paperCombo.delegateModel : null
-                                    currentIndex: paperCombo.highlightedIndex
-                                    ScrollIndicator.vertical: ScrollIndicator {}
-                                }
-
-                                background: Rectangle {
-                                    color: bgElevated
-                                    radius: 10
-                                    border.color: divider
-                                    border.width: 1
-
-                                    layer.enabled: true
-                                    layer.effect: DropShadow {
-                                        transparentBorder: true
-                                        horizontalOffset: 0
-                                        verticalOffset: 6
-                                        radius: 16
-                                        samples: 33
-                                        color: "#50000000"
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    // Status badge
-                    Rectangle {
-                        visible: backend.loaded
-                        width: statusContent.width + 14
-                        height: 26
-                        radius: 6
-                        color: Qt.rgba(accentGreen.r, accentGreen.g, accentGreen.b, 0.12)
-
-                        Behavior on opacity { NumberAnimation { duration: 200 } }
-
-                        Row {
-                            id: statusContent
-                            anchors.centerIn: parent
-                            spacing: 6
-
-                            Rectangle {
-                                width: 6
-                                height: 6
-                                radius: 3
-                                color: accentGreen
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-
-                            Text {
-                                text: "ROM Loaded"
-                                font.pixelSize: 11
-                                font.weight: Font.Medium
-                                color: accentGreen
-                            }
-                        }
-                    }
-                }
-            }
-
             // Main content area (sidebar + canvas)
             RowLayout {
                 Layout.fillWidth: true
@@ -639,10 +552,27 @@ ApplicationWindow {
                 // Save browser sidebar
                 SaveBrowser {
                     id: saveBrowser
-                    Layout.preferredWidth: 200
+                    Layout.preferredWidth: backend.saveLoaded ? 220 : 0
                     Layout.fillHeight: true
-                    visible: backend.saveLoaded
+                    visible: Layout.preferredWidth > 0
+                    opacity: backend.saveLoaded ? 1.0 : 0.0
+                    clip: true
                     backend: backend
+
+                    // Smooth slide-in animation
+                    Behavior on Layout.preferredWidth {
+                        NumberAnimation {
+                            duration: 200
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 150
+                            easing.type: Easing.OutCubic
+                        }
+                    }
 
                     // Pass colors from window
                     bgBase: window.bgBase
@@ -652,6 +582,7 @@ ApplicationWindow {
                     bgActive: window.bgActive
                     accentPrimary: window.accentPrimary
                     accentGreen: window.accentGreen
+                    warningColor: window.warningColor
                     textPrimary: window.textPrimary
                     textSecondary: window.textSecondary
                     textMuted: window.textMuted
@@ -660,22 +591,136 @@ ApplicationWindow {
                     onSlotSelected: {
                         canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
                         paperCombo.currentIndex = backend.currentPaper
+                        dirtyState.capture()
                         canvas.forceActiveFocus()
+                    }
+
+                    onSlotSaved: {
+                        dirtyState.capture()
+                    }
+
+                    // Handle slot change requests with dirty check
+                    onRequestSlotChange: {
+                        dirtyState.check()
+                        dirtyState.confirmDiscard(function() {
+                            saveBrowser.loadSlot(newSlot)
+                        })
+                    }
+
+                    // Handle storage change requests with dirty check
+                    onRequestStorageChange: {
+                        dirtyState.check()
+                        dirtyState.confirmDiscard(function() {
+                            saveBrowser.changeStorage(newStorage)
+                        })
+                    }
+
+                    // Handle player change requests with dirty check
+                    onRequestPlayerChange: {
+                        dirtyState.check()
+                        dirtyState.confirmDiscard(function() {
+                            saveBrowser.changePlayer(newPlayer)
+                        })
                     }
                 }
 
                 // Divider between sidebar and canvas
                 Rectangle {
-                    Layout.preferredWidth: 1
+                    Layout.preferredWidth: backend.saveLoaded ? 1 : 0
                     Layout.fillHeight: true
                     color: divider
-                    visible: backend.saveLoaded
+                    visible: Layout.preferredWidth > 0
+                    opacity: backend.saveLoaded ? 1.0 : 0.0
+
+                    Behavior on Layout.preferredWidth {
+                        NumberAnimation {
+                            duration: 200
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 150
+                            easing.type: Easing.OutCubic
+                        }
+                    }
                 }
 
                 // Canvas area
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+
+                    // Status badges - top right
+                    Row {
+                        anchors.top: parent.top
+                        anchors.right: parent.right
+                        anchors.topMargin: 12
+                        anchors.rightMargin: 16
+                        spacing: 8
+                        z: 10
+
+                        // ROM Loaded badge
+                        Rectangle {
+                            visible: backend.loaded
+                            width: romStatusContent.width + 14
+                            height: 26
+                            radius: 6
+                            color: Qt.rgba(accentGreen.r, accentGreen.g, accentGreen.b, 0.12)
+
+                            Row {
+                                id: romStatusContent
+                                anchors.centerIn: parent
+                                spacing: 6
+
+                                Rectangle {
+                                    width: 6
+                                    height: 6
+                                    radius: 3
+                                    color: accentGreen
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+
+                                Text {
+                                    text: "ROM Loaded"
+                                    font.pixelSize: 11
+                                    font.weight: Font.Medium
+                                    color: accentGreen
+                                }
+                            }
+                        }
+
+                        // SAVE Loaded badge
+                        Rectangle {
+                            visible: backend.saveLoaded
+                            width: saveStatusContent.width + 14
+                            height: 26
+                            radius: 6
+                            color: Qt.rgba(accentPrimary.r, accentPrimary.g, accentPrimary.b, 0.12)
+
+                            Row {
+                                id: saveStatusContent
+                                anchors.centerIn: parent
+                                spacing: 6
+
+                                Rectangle {
+                                    width: 6
+                                    height: 6
+                                    radius: 3
+                                    color: accentPrimary
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+
+                                Text {
+                                    text: "SAVE Loaded"
+                                    font.pixelSize: 11
+                                    font.weight: Font.Medium
+                                    color: accentPrimary
+                                }
+                            }
+                        }
+                    }
 
                     // Focus ring
                     Rectangle {
@@ -910,50 +955,145 @@ ApplicationWindow {
                         }
                     }
                 }
+
+                // Stationery selector - bottom right under canvas
+                Row {
+                    anchors.right: canvasFrame.right
+                    anchors.top: canvasFrame.bottom
+                    anchors.topMargin: 12
+                    spacing: 10
+                    visible: backend.loaded
+
+                    Label {
+                        text: "Stationery"
+                        font.pixelSize: 12
+                        font.weight: Font.Medium
+                        color: textMuted
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    ComboBox {
+                        id: paperCombo
+                        width: 160
+                        model: backend.paperNames
+                        enabled: backend.loaded
+                        currentIndex: backend.currentPaper
+                        font.pixelSize: 13
+
+                        onCurrentIndexChanged: {
+                            if (backend.loaded) {
+                                backend.currentPaper = currentIndex
+                            }
+                        }
+
+                        delegate: ItemDelegate {
+                            width: paperCombo.width
+                            height: 34
+
+                            contentItem: Text {
+                                text: modelData
+                                color: highlighted ? textPrimary : textSecondary
+                                font.pixelSize: 13
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: 10
+                            }
+
+                            background: Rectangle {
+                                color: highlighted ? bgHover : "transparent"
+                                radius: 4
+
+                                Behavior on color { ColorAnimation { duration: 80 } }
+                            }
+
+                            highlighted: paperCombo.highlightedIndex === index
+                        }
+
+                        indicator: Canvas {
+                            x: paperCombo.width - width - 10
+                            y: (paperCombo.height - height) / 2
+                            width: 10
+                            height: 6
+
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.reset()
+                                ctx.fillStyle = textMuted
+                                ctx.moveTo(0, 0)
+                                ctx.lineTo(width, 0)
+                                ctx.lineTo(width / 2, height)
+                                ctx.closePath()
+                                ctx.fill()
+                            }
+                        }
+
+                        contentItem: Text {
+                            leftPadding: 12
+                            rightPadding: 28
+                            text: paperCombo.displayText
+                            font.pixelSize: 13
+                            color: paperCombo.enabled ? textPrimary : textMuted
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+
+                        background: Rectangle {
+                            implicitHeight: 34
+                            radius: 8
+                            color: paperCombo.down ? bgActive : (paperCombo.hovered ? bgHover : bgElevated)
+
+                            Behavior on color { ColorAnimation { duration: 80 } }
+                        }
+
+                        popup: Popup {
+                            y: -implicitHeight - 6  // Pop up above the combobox
+                            width: paperCombo.width
+                            implicitHeight: Math.min(contentItem.implicitHeight + 12, 280)
+                            padding: 6
+
+                            contentItem: ListView {
+                                clip: true
+                                implicitHeight: contentHeight
+                                model: paperCombo.popup.visible ? paperCombo.delegateModel : null
+                                currentIndex: paperCombo.highlightedIndex
+                                ScrollIndicator.vertical: ScrollIndicator {}
+                            }
+
+                            background: Rectangle {
+                                color: bgElevated
+                                radius: 10
+                                border.color: divider
+                                border.width: 1
+
+                                layer.enabled: true
+                                layer.effect: DropShadow {
+                                    transparentBorder: true
+                                    horizontalOffset: 0
+                                    verticalOffset: -6
+                                    radius: 16
+                                    samples: 33
+                                    color: "#50000000"
+                                }
+                            }
+                        }
+                    }
+                }
                 }  // Close Canvas area Item
             }  // Close RowLayout (Main content area)
 
-            // Footer
-            Rectangle {
+            // Footer / Status Bar
+            StatusBar {
+                id: statusBar
                 Layout.fillWidth: true
-                Layout.preferredHeight: 36
-                color: bgSurface
-                radius: isMaximized ? 0 : 12
+                backend: backend
+                letterModified: dirtyState.letterModified
 
-                // Square off top corners
-                Rectangle {
-                    width: parent.width
-                    height: 12
-                    color: bgSurface
-                    visible: !isMaximized
-                }
-
-                Rectangle {
-                    width: parent.width
-                    height: 1
-                    color: divider
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 20
-                    anchors.rightMargin: 20
-
-                    Text {
-                        text: backend.loaded ? "Type to edit  ·  Arrow keys to navigate  ·  Enter for new line" : "File → Open ROM to begin"
-                        font.pixelSize: 11
-                        color: textMuted
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    Text {
-                        visible: backend.loaded
-                        text: (paperCombo.currentIndex + 1) + " / 64"
-                        font.pixelSize: 11
-                        color: textMuted
-                    }
-                }
+                // Pass colors
+                bgSurface: window.bgSurface
+                accentGreen: window.accentGreen
+                warningColor: window.warningColor
+                textPrimary: window.textPrimary
+                textMuted: window.textMuted
+                divider: window.divider
             }
         }
     }
@@ -1149,6 +1289,12 @@ ApplicationWindow {
         sequence: "Ctrl+O"
         enabled: !backend.loaded
         onActivated: fileDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+W"
+        enabled: backend.saveLoaded
+        onActivated: closeSaveFile()
     }
 
     Shortcut {
@@ -1616,6 +1762,46 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+    }
+
+    // Unsaved Changes Dialog
+    UnsavedChangesDialog {
+        id: unsavedChangesDialog
+        anchors.centerIn: parent
+
+        // Pass colors
+        bgBase: window.bgBase
+        bgElevated: window.bgElevated
+        bgHover: window.bgHover
+        accentPrimary: window.accentPrimary
+        accentGreen: window.accentGreen
+        warningColor: window.warningColor
+        errorColor: window.errorColor
+        textPrimary: window.textPrimary
+        textSecondary: window.textSecondary
+        textMuted: window.textMuted
+        divider: window.divider
+
+        onDiscarded: {
+            dirtyState.letterModified = false
+            if (pendingAction) {
+                pendingAction()
+                pendingAction = null
+            }
+        }
+
+        onSaved: {
+            backend.saveCurrentSlot()
+            dirtyState.capture()
+            if (pendingAction) {
+                pendingAction()
+                pendingAction = null
+            }
+        }
+
+        onCancelled: {
+            pendingAction = null
         }
     }
 

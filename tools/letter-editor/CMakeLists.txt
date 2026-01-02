@@ -38,6 +38,12 @@ set(HEADERS
     src/savefile.h
 )
 
+# Windows-specific frameless window helper
+if(WIN32)
+    list(APPEND SOURCES src/framelesswindowhelper.cpp)
+    list(APPEND HEADERS src/framelesswindowhelper.h)
+endif()
+
 # Resources
 set(RESOURCES
     resources.qrc
@@ -54,6 +60,11 @@ target_link_libraries(letter-editor
     Qt5::Quick
     Qt5::QuickControls2
 )
+
+# Windows-specific libraries for frameless window
+if(WIN32)
+    target_link_libraries(letter-editor dwmapi)
+endif()
 
 # Include directories
 target_include_directories(letter-editor PRIVATE src)

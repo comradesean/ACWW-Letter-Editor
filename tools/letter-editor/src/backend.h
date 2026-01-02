@@ -106,11 +106,13 @@ public:
     // Save file operations
     Q_INVOKABLE bool loadSave(const QUrl& fileUrl);
     Q_INVOKABLE bool saveSave(const QUrl& fileUrl = QUrl());
+    Q_INVOKABLE void closeSave();
     Q_INVOKABLE void loadCurrentSlot();
     Q_INVOKABLE void saveCurrentSlot();
     Q_INVOKABLE QVariantList getSlotSummaries() const;
     Q_INVOKABLE void clearLetter();
     Q_INVOKABLE void importAddresseeFromSave();
+    Q_INVOKABLE bool playerExists(int player) const;
 
     // For canvas rendering
     const StationeryLoader& stationery() const { return m_stationery; }

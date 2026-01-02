@@ -104,7 +104,7 @@ bool Letter::isEmpty() const {
 }
 
 QString Letter::getGreetingWithName() const {
-    if (namePosition > 0 && namePosition <= greeting.length() && !toPlayerName.isEmpty()) {
+    if (namePosition >= 0 && namePosition <= greeting.length() && !toPlayerName.isEmpty()) {
         return greeting.left(namePosition) + toPlayerName + greeting.mid(namePosition);
     }
     return greeting;
@@ -165,7 +165,6 @@ QByteArray Letter::toBytes() const {
     data[LetterFormat::NAME_POS_OFFSET] = static_cast<char>(namePosition);
     data[LetterFormat::STATIONERY_OFFSET] = static_cast<char>(stationeryType & 0x3F);
     data[LetterFormat::STATUS_OFFSET] = static_cast<char>(status);
-    data[LetterFormat::ORIGIN_OFFSET] = static_cast<char>(originType);
     writeU16LE(data, LetterFormat::ITEM_OFFSET, attachedItem);
 
     return data;
@@ -206,7 +205,6 @@ Letter Letter::fromBytes(const QByteArray& data) {
     letter.namePosition = static_cast<uint8_t>(data[LetterFormat::NAME_POS_OFFSET]);
     letter.stationeryType = static_cast<uint8_t>(data[LetterFormat::STATIONERY_OFFSET]) & 0x3F;
     letter.status = static_cast<uint8_t>(data[LetterFormat::STATUS_OFFSET]);
-    letter.originType = static_cast<uint8_t>(data[LetterFormat::ORIGIN_OFFSET]);
     letter.attachedItem = readU16LE(data, LetterFormat::ITEM_OFFSET);
 
     return letter;

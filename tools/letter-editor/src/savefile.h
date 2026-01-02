@@ -44,6 +44,7 @@ public:
     // File operations
     Q_INVOKABLE bool load(const QString& path);
     Q_INVOKABLE bool save(const QString& path = QString());
+    Q_INVOKABLE void close();
 
     // Properties
     bool isLoaded() const { return m_loaded; }

@@ -1,407 +1,519 @@
-# ACWW Save File Format Documentation
+# Animal Crossing: Wild World - Save File Format
 
-This document details the binary structure of Animal Crossing: Wild World save files (.sav), specifically focusing on letter data.
-
-## Letter Structure
-
-Each letter is **244 bytes (0xF4)** long.
-
-### Letter Field Offsets
-
-| Offset | Size | Field |
-|--------|------|-------|
-| `0x00-0x13` | 20 bytes | To Field (recipient name + town) |
-| `0x14` | 1 byte | Receiver's town save slot position (0x00-0x03) |
-| `0x14-0x17` | 4 bytes | Letter type flags (see below) |
-| `0x18-0x2B` | 20 bytes | From Field (sender name + town) |
-| `0x2C` | 1 byte | Sender's town save slot position (0x00-0x03) |
-| `0x2C-0x2F` | 4 bytes | Sender type flags (see below) |
-| `0x30-0x3F` | 16 bytes | Greeting/Subject Field |
-| `0x3F-0x47` | 8 bytes | Unused (always `00 00 00 00 00 00 00 00`) |
-| `0x48-0xAB` | 100 bytes | Letter Body Text |
-| `0xAC-0xC7` | 28 bytes | Unused (always zeros) |
-| `0xC8-0xE1` | 26 bytes | Signature Field |
-| `0xE2-0xE7` | 6 bytes | Unused (always zeros) |
-| `0xE8` | 1 byte | Name position in greeting (0x00-0x10) |
-| `0xE9` | 1 byte | Stationery type (see table below) |
-| `0xEA` | 1 byte | Letter status (read/unread) |
-| `0xEB` | 1 byte | Letter origin type |
-| `0xEC-0xED` | 2 bytes | Attached item hex code (little-endian) |
-| `0xEE-0xF3` | 6 bytes | Unused (always zeros) |
-
-### Letter Type Flags (0x14-0x17)
-
-| Hex Value | Meaning |
-|-----------|---------|
-| `00 00 03 00` | Written Letters (Not Sent) |
-| `00 00 06 00` | Bottled Mail (Received) |
-| `01 00 02 00` | Valentine's Day Letter (Untouched) |
-| `00 00 02 00` | Everything Else |
-
-### Sender Type Flags (0x2C-0x2F)
-
-| Hex Value | Meaning |
-|-----------|---------|
-| `00 00 04 00` | Bottle Mail |
-| `01 00 02 00` | Tortimer President Letter |
-| `00 00 02 00` | Everything Else |
-
-### Letter Status (0xEA)
-
-| Value | Meaning |
-|-------|---------|
-| `0x42` | Untouched/Unread letter |
-| `0x03` | Opened letter |
-| `0x06` | Opened bottled letter |
-
-### Letter Origin Type (0xEB)
-
-| Value | Meaning |
-|-------|---------|
-| `0x11` | Nintendo Letters |
-| `0x0C` | Bottled Letter |
-| `0x00` | Written Letters (Not Sent) |
+Technical documentation for the binary structure of ACWW save files (`.sav`), focusing on letter data for the **EUR/USA region**.
 
 ---
 
-## Stationery Types
+## Table of Contents
 
-| Item ID | Hex | Name |
-|---------|-----|------|
-| 1000 | 0x00 | Butterfly paper |
-| 1004 | 0x01 | Airmail paper |
-| 1008 | 0x02 | New year's cards |
-| 100C | 0x03 | Lacy paper |
-| 1010 | 0x04 | Cloudy paper |
-| 1014 | 0x05 | Petal paper |
-| 1018 | 0x06 | Snowy paper |
-| 101C | 0x07 | Maple-leaf paper |
-| 1020 | 0x08 | Lined paper |
-| 1024 | 0x09 | Notebook paper |
-| 1028 | 0x0A | Flowery paper |
-| 102C | 0x0B | Polka-dot paper |
-| 1030 | 0x0C | Bottle paper (not in catalog) |
-| 1034 | 0x0D | Ribbon paper |
-| 1038 | 0x0E | Sparkly paper |
-| 103C | 0x0F | Vine paper |
-| 1040 | 0x10 | Formal paper |
-| 1044 | 0x11 | Snowman paper |
-| 1048 | 0x12 | Card paper |
-| 104C | 0x13 | Leopard paper |
-| 1050 | 0x14 | Cow paper |
-| 1054 | 0x15 | Camouflage paper |
-| 1058 | 0x16 | Hamburger paper |
-| 105C | 0x17 | Piano paper |
-| 1060 | 0x18 | Nook paper |
-| 1064 | 0x19 | Fox paper |
-| 1068 | 0x1A | Birthday cards |
-| 106C | 0x1B | Four-leaf paper |
-| 1070 | 0x1C | Town-hall paper |
-| 1074 | 0x1D | Tortimer paper |
-| 1078 | 0x1E | Insurance paper |
-| 107C | 0x1F | Academy paper |
-| 1080 | 0x20 | Lovely paper |
-| 1084 | 0x21 | Rainbow paper |
-| 1088 | 0x22 | Egyptian paper |
-| 108C | 0x23 | Lotus paper |
-| 1090 | 0x24 | Tile paper |
-| 1094 | 0x25 | Mosaic paper |
-| 1098 | 0x26 | Elegant paper |
-| 109C | 0x27 | Town view paper |
-| 10A0 | 0x28 | Chinese paper |
-| 10A4 | 0x29 | Ocean paper |
-| 10A8 | 0x2A | Industrial paper |
-| 10AC | 0x2B | Fireworks paper |
-| 10B0 | 0x2C | Floral paper |
-| 10B4 | 0x2D | Mushroom paper |
-| 10B8 | 0x2E | Star paper |
-| 10BC | 0x2F | Composer paper |
-| 10C0 | 0x30 | Bathtub paper |
-| 10C4 | 0x31 | SMB3 paper |
-| 10C8 | 0x32 | Cool paper |
-| 10CC | 0x33 | Forest paper |
-| 10D0 | 0x34 | Bubble paper |
-| 10D4 | 0x35 | Buttercup paper |
-| 10D8 | 0x36 | Tartan paper |
-| 10DC | 0x37 | Plaid paper |
-| 10E0 | 0x38 | Lemon-lime paper |
-| 10E4 | 0x39 | Crater paper |
-| 10E8 | 0x3A | Bejeweled paper |
-| 10EC | 0x3B | Geometric paper |
-| 10F0 | 0x3C | Southwest paper |
-| 10F4 | 0x3D | Night sky paper |
-| 10F8 | 0x3E | Chic paper |
-| 10FC | 0x3F | Goldfish paper |
+1. [Overview](#overview)
+2. [Letter Structure](#letter-structure)
+3. [Letter Storage Locations](#letter-storage-locations)
+4. [Stationery Reference](#stationery-reference)
+5. [Appendix](#appendix)
+
+---
+
+## Overview
+
+### Key Constants
+
+| Property | Value | Description |
+|----------|-------|-------------|
+| Letter size | `0xF4` (244 bytes) | Total size of each letter record |
+| Header | 4 bytes (`0x00-0x03`) | Always `00 00 00 00` |
+| Footer | 2 bytes (`0xF2-0xF3`) | Always `00 00` |
+| Greeting field | `0x18` (24 bytes) | Subject/greeting line |
+| Body field | `0x80` (128 bytes) | Main letter content |
+| Signature field | `0x20` (32 bytes) | Letter closing/signature |
+
+### Important Notes
+
+- All offsets in this document are for **EUR/USA region** save files
+- The save file contains both **primary** and **backup** copies of letter data
+- All field offsets within the letter structure are **relative to the start of each letter**
+- All save file offsets in this document have been corrected by -4 bytes from older documentation
+
+---
+
+## Letter Structure
+
+Each letter occupies exactly **244 bytes (`0xF4`)**, structured as follows:
+
+### Field Layout
+
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| `0x00-0x03` | 4 bytes | Header | Always `00 00 00 00` |
+| `0x04-0x05` | 2 bytes | Recipient Town ID | Unique identifier for recipient's town |
+| `0x06-0x0D` | 8 bytes | Recipient Town Name | ACWW-encoded town name |
+| `0x0E-0x0F` | 2 bytes | Recipient Player ID | Unique identifier for recipient |
+| `0x10-0x17` | 8 bytes | Recipient Player Name | ACWW-encoded player name |
+| `0x18-0x1B` | 4 bytes | Receiver Type Flags | See [Receiver Type Flags](#receiver-type-flags) |
+| `0x1C-0x1D` | 2 bytes | Sender Town ID | Unique identifier for sender's town |
+| `0x1E-0x25` | 8 bytes | Sender Town Name | ACWW-encoded town name |
+| `0x26-0x27` | 2 bytes | Sender Player ID | Unique identifier for sender |
+| `0x28-0x2F` | 8 bytes | Sender Player Name | ACWW-encoded player name |
+| `0x30-0x33` | 4 bytes | Sender Type Flags | See [Sender Type Flags](#sender-type-flags) |
+| `0x34-0x4B` | 24 bytes (`0x18`) | Greeting | Subject/greeting line |
+| `0x4C-0xCB` | 128 bytes (`0x80`) | Body | Main letter content |
+| `0xCC-0xEB` | 32 bytes (`0x20`) | Signature | Letter closing/signature |
+| `0xEC` | 1 byte | Name Position | Position of recipient name in greeting (`0x00-0x10`) |
+| `0xED` | 1 byte | Stationery ID | Paper background (0-63); see [Stationery Reference](#stationery-reference) |
+| `0xEE` | 1 byte | Letter Status | Read/unread state; see [Letter Status](#letter-status) |
+| `0xEF` | 1 byte | Letter Origin | Source type; see [Letter Origin](#letter-origin) |
+| `0xF0-0xF1` | 2 bytes | Attached Item | Item hex code (little-endian) |
+| `0xF2-0xF3` | 2 bytes | Footer | Always `00 00` |
+
+### Visual Layout
+
+```
++------------------+------------------+------------------+------------------+
+| 0x00-0x03        | 0x04-0x1B        | 0x1C-0x33        | 0x34-0xEB        |
+| Header (4B)      | Recipient (24B)  | Sender (24B)     | Content (184B)   |
++------------------+------------------+------------------+------------------+
+| 0xEC-0xF1        | 0xF2-0xF3        |
+| Metadata (6B)    | Footer (2B)      |
++-----------------+------------------+
+```
+
+---
+
+### Receiver Type Flags
+
+Located at offset `0x18-0x1B` (4 bytes).
+
+| Hex Value | Meaning |
+|-----------|---------|
+| `00 00 03 00` | Written letter (not sent) |
+| `00 00 06 00` | Bottled mail (received) |
+| `01 00 02 00` | Valentine's Day letter (untouched) |
+| `00 00 02 00` | All other letters |
+
+---
+
+### Sender Type Flags
+
+Located at offset `0x30-0x33` (4 bytes).
+
+| Hex Value | Meaning |
+|-----------|---------|
+| `00 00 04 00` | Bottle mail |
+| `01 00 02 00` | Tortimer President letter |
+| `00 00 02 00` | All other letters |
+
+---
+
+### Letter Status
+
+Located at offset `0xEE` (1 byte).
+
+| Value | Meaning |
+|-------|---------|
+| `0x42` | Unread (untouched) |
+| `0x03` | Opened (read) |
+| `0x06` | Opened bottled letter |
+
+---
+
+### Letter Origin
+
+Located at offset `0xEF` (1 byte).
+
+| Value | Meaning |
+|-------|---------|
+| `0x00` | Written letter (not sent) |
+| `0x0C` | Bottled letter |
+| `0x11` | Nintendo letter |
 
 ---
 
 ## Letter Storage Locations
 
-### Player Inventory Letters (10 slots each)
+Letters are stored in three locations per player:
 
-Letters carried in player's pockets.
+| Storage Type | Slots per Player | Description |
+|--------------|------------------|-------------|
+| Inventory | 10 | Letters carried in player's pockets |
+| Mailbox | 10 | Letters stored at player's home mailbox |
+| Bank Storage | 75 (3 pages of 25) | Letters stored at town hall post office |
 
-| Player | Address Range | Backup Save Range |
-|--------|--------------|-------------------|
-| Player 1 | `0x1158-0x1ADF` | `0x17138-0x17ABF` |
-| Player 2 | `0x33E4-0x3D6B` | `0x193C4-0x19D4B` |
-| Player 3 | `0x5670-0x5FF7` | `0x1B650-0x1BFD7` |
-| Player 4 | `0x78FC-0x8283` | `0x1D8DC-0x1E263` |
+### Address Calculation
+
+To calculate any letter slot address:
+
+```
+slot_address = base_address + (slot_index * 0xF4)
+```
+
+Where `0xF4` (244) is the letter size in bytes.
+
+---
+
+### Inventory Letters
+
+Letters carried in the player's pockets (10 slots per player).
+
+#### Summary Table
+
+| Player | Primary Range | Backup Range |
+|--------|---------------|--------------|
+| Player 1 | `0x01154` - `0x01ADB` | `0x17134` - `0x17ABB` |
+| Player 2 | `0x033E0` - `0x03D67` | `0x193C0` - `0x19D47` |
+| Player 3 | `0x0566C` - `0x05FF3` | `0x1B64C` - `0x1BFD3` |
+| Player 4 | `0x078F8` - `0x0827F` | `0x1D8D8` - `0x1E25F` |
 
 #### Player 1 Inventory Slots
 
 | Slot | Start | End |
 |------|-------|-----|
-| 1 | 0x1158 | 0x124B |
-| 2 | 0x124C | 0x133F |
-| 3 | 0x1340 | 0x1433 |
-| 4 | 0x1434 | 0x1527 |
-| 5 | 0x1528 | 0x161B |
-| 6 | 0x161C | 0x170F |
-| 7 | 0x1710 | 0x1803 |
-| 8 | 0x1804 | 0x18F7 |
-| 9 | 0x18F8 | 0x19EB |
-| 10 | 0x19EC | 0x1ADF |
+| 1 | `0x01154` | `0x01247` |
+| 2 | `0x01248` | `0x0133B` |
+| 3 | `0x0133C` | `0x0142F` |
+| 4 | `0x01430` | `0x01523` |
+| 5 | `0x01524` | `0x01617` |
+| 6 | `0x01618` | `0x0170B` |
+| 7 | `0x0170C` | `0x017FF` |
+| 8 | `0x01800` | `0x018F3` |
+| 9 | `0x018F4` | `0x019E7` |
+| 10 | `0x019E8` | `0x01ADB` |
 
 #### Player 2 Inventory Slots
 
 | Slot | Start | End |
 |------|-------|-----|
-| 1 | 0x33E4 | 0x34D7 |
-| 2 | 0x34D8 | 0x35CB |
-| 3 | 0x35CC | 0x36BF |
-| 4 | 0x36C0 | 0x37B3 |
-| 5 | 0x37B4 | 0x38A7 |
-| 6 | 0x38A8 | 0x399B |
-| 7 | 0x399C | 0x3A8F |
-| 8 | 0x3A90 | 0x3B83 |
-| 9 | 0x3B84 | 0x3C77 |
-| 10 | 0x3C78 | 0x3D6B |
+| 1 | `0x033E0` | `0x034D3` |
+| 2 | `0x034D4` | `0x035C7` |
+| 3 | `0x035C8` | `0x036BB` |
+| 4 | `0x036BC` | `0x037AF` |
+| 5 | `0x037B0` | `0x038A3` |
+| 6 | `0x038A4` | `0x03997` |
+| 7 | `0x03998` | `0x03A8B` |
+| 8 | `0x03A8C` | `0x03B7F` |
+| 9 | `0x03B80` | `0x03C73` |
+| 10 | `0x03C74` | `0x03D67` |
 
 #### Player 3 Inventory Slots
 
 | Slot | Start | End |
 |------|-------|-----|
-| 1 | 0x5670 | 0x5763 |
-| 2 | 0x5764 | 0x5857 |
-| 3 | 0x5858 | 0x594B |
-| 4 | 0x594C | 0x5A3F |
-| 5 | 0x5A40 | 0x5B33 |
-| 6 | 0x5B34 | 0x5C27 |
-| 7 | 0x5C28 | 0x5D1B |
-| 8 | 0x5D1C | 0x5E0F |
-| 9 | 0x5E10 | 0x5F03 |
-| 10 | 0x5F04 | 0x5FF7 |
+| 1 | `0x0566C` | `0x0575F` |
+| 2 | `0x05760` | `0x05853` |
+| 3 | `0x05854` | `0x05947` |
+| 4 | `0x05948` | `0x05A3B` |
+| 5 | `0x05A3C` | `0x05B2F` |
+| 6 | `0x05B30` | `0x05C23` |
+| 7 | `0x05C24` | `0x05D17` |
+| 8 | `0x05D18` | `0x05E0B` |
+| 9 | `0x05E0C` | `0x05EFF` |
+| 10 | `0x05F00` | `0x05FF3` |
 
 #### Player 4 Inventory Slots
 
 | Slot | Start | End |
 |------|-------|-----|
-| 1 | 0x78FC | 0x79EF |
-| 2 | 0x79F0 | 0x7AE3 |
-| 3 | 0x7AE4 | 0x7BD7 |
-| 4 | 0x7BD8 | 0x7CCB |
-| 5 | 0x7CCC | 0x7DBF |
-| 6 | 0x7DC0 | 0x7EB3 |
-| 7 | 0x7EB4 | 0x7FA7 |
-| 8 | 0x7FA8 | 0x809B |
-| 9 | 0x809C | 0x818F |
-| 10 | 0x8190 | 0x8283 |
+| 1 | `0x078F8` | `0x079EB` |
+| 2 | `0x079EC` | `0x07ADF` |
+| 3 | `0x07AE0` | `0x07BD3` |
+| 4 | `0x07BD4` | `0x07CC7` |
+| 5 | `0x07CC8` | `0x07DBB` |
+| 6 | `0x07DBC` | `0x07EAF` |
+| 7 | `0x07EB0` | `0x07FA3` |
+| 8 | `0x07FA4` | `0x08097` |
+| 9 | `0x08098` | `0x0818B` |
+| 10 | `0x0818C` | `0x0827F` |
 
 ---
 
-### Mailbox Letters (10 slots each)
+### Mailbox Letters
 
-Letters stored in player's home mailbox. Each mailbox section ends with a 4-byte buffer (`00 00 00 00`).
+Letters stored in the player's home mailbox (10 slots per player).
 
-| Player | Address Range | Backup Save Range |
-|--------|--------------|-------------------|
-| Player 1 | `0x12010-0x12997` | `0x27FF0-0x28977` |
-| Player 2 | `0x1299C-0x13323` | `0x2897C-0x29303` |
-| Player 3 | `0x13328-0x13CAF` | `0x29308-0x29C8F` |
-| Player 4 | `0x13CB4-0x1463B` | `0x29C94-0x2A61B` |
+#### Summary Table
+
+| Player | Primary Range | Backup Range |
+|--------|---------------|--------------|
+| Player 1 | `0x1200C` - `0x12993` | `0x27FEC` - `0x28973` |
+| Player 2 | `0x12998` - `0x1331F` | `0x28978` - `0x292FF` |
+| Player 3 | `0x13324` - `0x13CAB` | `0x29304` - `0x29C8B` |
+| Player 4 | `0x13CB0` - `0x14637` | `0x29C90` - `0x2A617` |
 
 #### Player 1 Mailbox Slots
 
 | Slot | Start | End |
 |------|-------|-----|
-| 1 | 0x12010 | 0x12103 |
-| 2 | 0x12104 | 0x121F7 |
-| 3 | 0x121F8 | 0x122EB |
-| 4 | 0x122EC | 0x123DF |
-| 5 | 0x123E0 | 0x124D3 |
-| 6 | 0x124D4 | 0x125C7 |
-| 7 | 0x125C8 | 0x126BB |
-| 8 | 0x126BC | 0x127AF |
-| 9 | 0x127B0 | 0x128A3 |
-| 10 | 0x128A4 | 0x12997 |
+| 1 | `0x1200C` | `0x120FF` |
+| 2 | `0x12100` | `0x121F3` |
+| 3 | `0x121F4` | `0x122E7` |
+| 4 | `0x122E8` | `0x123DB` |
+| 5 | `0x123DC` | `0x124CF` |
+| 6 | `0x124D0` | `0x125C3` |
+| 7 | `0x125C4` | `0x126B7` |
+| 8 | `0x126B8` | `0x127AB` |
+| 9 | `0x127AC` | `0x1289F` |
+| 10 | `0x128A0` | `0x12993` |
 
 #### Player 2 Mailbox Slots
 
 | Slot | Start | End |
 |------|-------|-----|
-| 1 | 0x1299C | 0x12A8F |
-| 2 | 0x12A90 | 0x12B83 |
-| 3 | 0x12B84 | 0x12C77 |
-| 4 | 0x12C78 | 0x12D6B |
-| 5 | 0x12D6C | 0x12E5F |
-| 6 | 0x12E60 | 0x12F53 |
-| 7 | 0x12F54 | 0x13047 |
-| 8 | 0x13048 | 0x1313B |
-| 9 | 0x1313C | 0x1322F |
-| 10 | 0x13230 | 0x13323 |
+| 1 | `0x12998` | `0x12A8B` |
+| 2 | `0x12A8C` | `0x12B7F` |
+| 3 | `0x12B80` | `0x12C73` |
+| 4 | `0x12C74` | `0x12D67` |
+| 5 | `0x12D68` | `0x12E5B` |
+| 6 | `0x12E5C` | `0x12F4F` |
+| 7 | `0x12F50` | `0x13043` |
+| 8 | `0x13044` | `0x13137` |
+| 9 | `0x13138` | `0x1322B` |
+| 10 | `0x1322C` | `0x1331F` |
 
 #### Player 3 Mailbox Slots
 
 | Slot | Start | End |
 |------|-------|-----|
-| 1 | 0x13328 | 0x1341B |
-| 2 | 0x1341C | 0x1350F |
-| 3 | 0x13510 | 0x13603 |
-| 4 | 0x13604 | 0x136F7 |
-| 5 | 0x136F8 | 0x137EB |
-| 6 | 0x137EC | 0x138DF |
-| 7 | 0x138E0 | 0x139D3 |
-| 8 | 0x139D4 | 0x13AC7 |
-| 9 | 0x13AC8 | 0x13BBB |
-| 10 | 0x13BBC | 0x13CAF |
+| 1 | `0x13324` | `0x13417` |
+| 2 | `0x13418` | `0x1350B` |
+| 3 | `0x1350C` | `0x135FF` |
+| 4 | `0x13600` | `0x136F3` |
+| 5 | `0x136F4` | `0x137E7` |
+| 6 | `0x137E8` | `0x138DB` |
+| 7 | `0x138DC` | `0x139CF` |
+| 8 | `0x139D0` | `0x13AC3` |
+| 9 | `0x13AC4` | `0x13BB7` |
+| 10 | `0x13BB8` | `0x13CAB` |
 
 #### Player 4 Mailbox Slots
 
 | Slot | Start | End |
 |------|-------|-----|
-| 1 | 0x13CB4 | 0x13DA7 |
-| 2 | 0x13DA8 | 0x13E9B |
-| 3 | 0x13E9C | 0x13F8F |
-| 4 | 0x13F90 | 0x14083 |
-| 5 | 0x14084 | 0x14177 |
-| 6 | 0x14178 | 0x1426B |
-| 7 | 0x1426C | 0x1435F |
-| 8 | 0x14360 | 0x14453 |
-| 9 | 0x14454 | 0x14547 |
-| 10 | 0x14548 | 0x1463B |
+| 1 | `0x13CB0` | `0x13DA3` |
+| 2 | `0x13DA4` | `0x13E97` |
+| 3 | `0x13E98` | `0x13F8B` |
+| 4 | `0x13F8C` | `0x1407F` |
+| 5 | `0x14080` | `0x14173` |
+| 6 | `0x14174` | `0x14267` |
+| 7 | `0x14268` | `0x1435B` |
+| 8 | `0x1435C` | `0x1444F` |
+| 9 | `0x14450` | `0x14543` |
+| 10 | `0x14544` | `0x14637` |
 
 ---
 
-### Bank Storage Letters (75 slots each, 3 pages of 25)
+### Bank Storage Letters
 
-Letters stored at the town hall post office. Total range: `0x23210-0x3FFFF`
+Letters stored at the town hall post office (75 slots per player, organized as 3 pages of 25).
+
+#### Address Calculation
+
+```
+player_base = 0x2E20C + (player_index * 0x4778)
+slot_address = player_base + (slot_index * 0xF4)
+```
+
+Where:
+- `player_index` = 0-3 (for Players 1-4)
+- `slot_index` = 0-74 (for slots 1-75)
+- `0x4778` = player stride (18,296 bytes between players)
+- `0xF4` = letter size (244 bytes)
+
+#### Summary Table
 
 | Player | Address Range |
-|--------|--------------|
-| Player 1 | `0x23210-0x3298B` |
-| Player 2 | `0x3298C-0x37107` |
-| Player 3 | `0x37108-0x3B883` |
-| Player 4 | `0x3B884-0x3FFFF` |
+|--------|---------------|
+| Player 1 | `0x2E20C` - `0x32987` |
+| Player 2 | `0x32984` - `0x370FB` |
+| Player 3 | `0x370FC` - `0x3B873` |
+| Player 4 | `0x3B874` - `0x3FFEB` |
 
 #### Player 1 Bank Storage
 
-**Page 1 (Slots 1-25): `0x2E210-0x2F9E3`**
+**Page 1 (Slots 1-25): `0x2E20C` - `0x2F9DF`**
 
 | Slot | Start | End |
 |------|-------|-----|
-| 1 | 0x2E210 | 0x2E303 |
-| 2 | 0x2E304 | 0x2E3F7 |
-| 3 | 0x2E3F8 | 0x2E4EB |
-| 4 | 0x2E4EC | 0x2E5DF |
-| 5 | 0x2E5E0 | 0x2E6D3 |
-| 6 | 0x2E6D4 | 0x2E7C7 |
-| 7 | 0x2E7C8 | 0x2E8BB |
-| 8 | 0x2E8BC | 0x2E9AF |
-| 9 | 0x2E9B0 | 0x2EAA3 |
-| 10 | 0x2EAA4 | 0x2EB97 |
-| 11 | 0x2EB98 | 0x2EC8B |
-| 12 | 0x2EC8C | 0x2ED7F |
-| 13 | 0x2ED80 | 0x2EE73 |
-| 14 | 0x2EE74 | 0x2EF67 |
-| 15 | 0x2EF68 | 0x2F05B |
-| 16 | 0x2F05C | 0x2F14F |
-| 17 | 0x2F150 | 0x2F243 |
-| 18 | 0x2F244 | 0x2F337 |
-| 19 | 0x2F338 | 0x2F42B |
-| 20 | 0x2F42C | 0x2F51F |
-| 21 | 0x2F520 | 0x2F613 |
-| 22 | 0x2F614 | 0x2F707 |
-| 23 | 0x2F708 | 0x2F7FB |
-| 24 | 0x2F7FC | 0x2F8EF |
-| 25 | 0x2F8F0 | 0x2F9E3 |
+| 1 | `0x2E20C` | `0x2E2FF` |
+| 2 | `0x2E300` | `0x2E3F3` |
+| 3 | `0x2E3F4` | `0x2E4E7` |
+| 4 | `0x2E4E8` | `0x2E5DB` |
+| 5 | `0x2E5DC` | `0x2E6CF` |
+| 6 | `0x2E6D0` | `0x2E7C3` |
+| 7 | `0x2E7C4` | `0x2E8B7` |
+| 8 | `0x2E8B8` | `0x2E9AB` |
+| 9 | `0x2E9AC` | `0x2EA9F` |
+| 10 | `0x2EAA0` | `0x2EB93` |
+| 11 | `0x2EB94` | `0x2EC87` |
+| 12 | `0x2EC88` | `0x2ED7B` |
+| 13 | `0x2ED7C` | `0x2EE6F` |
+| 14 | `0x2EE70` | `0x2EF63` |
+| 15 | `0x2EF64` | `0x2F057` |
+| 16 | `0x2F058` | `0x2F14B` |
+| 17 | `0x2F14C` | `0x2F23F` |
+| 18 | `0x2F240` | `0x2F333` |
+| 19 | `0x2F334` | `0x2F427` |
+| 20 | `0x2F428` | `0x2F51B` |
+| 21 | `0x2F51C` | `0x2F60F` |
+| 22 | `0x2F610` | `0x2F703` |
+| 23 | `0x2F704` | `0x2F7F7` |
+| 24 | `0x2F7F8` | `0x2F8EB` |
+| 25 | `0x2F8EC` | `0x2F9DF` |
 
-**Page 2 (Slots 26-50): `0x2F9E4-0x311B7`**
-
-| Slot | Start | End |
-|------|-------|-----|
-| 26 | 0x2F9E4 | 0x2FAD7 |
-| 27 | 0x2FAD8 | 0x2FBCB |
-| 28 | 0x2FBCC | 0x2FCBF |
-| 29 | 0x2FCC0 | 0x2FDB3 |
-| 30 | 0x2FDB4 | 0x2FEA7 |
-| 31 | 0x2FEA8 | 0x2FF9B |
-| 32 | 0x2FF9C | 0x3008F |
-| 33 | 0x30090 | 0x30183 |
-| 34 | 0x30184 | 0x30277 |
-| 35 | 0x30278 | 0x3036B |
-| 36 | 0x3036C | 0x3045F |
-| 37 | 0x30460 | 0x30553 |
-| 38 | 0x30554 | 0x30647 |
-| 39 | 0x30648 | 0x3073B |
-| 40 | 0x3073C | 0x3082F |
-| 41 | 0x30830 | 0x30923 |
-| 42 | 0x30924 | 0x30A17 |
-| 43 | 0x30A18 | 0x30B0B |
-| 44 | 0x30B0C | 0x30BFF |
-| 45 | 0x30C00 | 0x30CF3 |
-| 46 | 0x30CF4 | 0x30DE7 |
-| 47 | 0x30DE8 | 0x30EDB |
-| 48 | 0x30EDC | 0x30FCF |
-| 49 | 0x30FD0 | 0x310C3 |
-| 50 | 0x310C4 | 0x311B7 |
-
-**Page 3 (Slots 51-75): `0x311B8-0x3298B`**
+**Page 2 (Slots 26-50): `0x2F9E0` - `0x311B3`**
 
 | Slot | Start | End |
 |------|-------|-----|
-| 51 | 0x311B8 | 0x312AB |
-| 52 | 0x312AC | 0x3139F |
-| 53 | 0x313A0 | 0x31493 |
-| 54 | 0x31494 | 0x31587 |
-| 55 | 0x31588 | 0x3167B |
-| 56 | 0x3167C | 0x3176F |
-| 57 | 0x31770 | 0x31863 |
-| 58 | 0x31864 | 0x31957 |
-| 59 | 0x31958 | 0x31A4B |
-| 60 | 0x31A4C | 0x31B3F |
-| 61 | 0x31B40 | 0x31C33 |
-| 62 | 0x31C34 | 0x31D27 |
-| 63 | 0x31D28 | 0x31E1B |
-| 64 | 0x31E1C | 0x31F0F |
-| 65 | 0x31F10 | 0x32003 |
-| 66 | 0x32004 | 0x320F7 |
-| 67 | 0x320F8 | 0x321EB |
-| 68 | 0x321EC | 0x322DF |
-| 69 | 0x322E0 | 0x323D3 |
-| 70 | 0x323D4 | 0x324C7 |
-| 71 | 0x324C8 | 0x325BB |
-| 72 | 0x325BC | 0x326AF |
-| 73 | 0x326B0 | 0x327A3 |
-| 74 | 0x327A4 | 0x32897 |
-| 75 | 0x32898 | 0x3298B |
+| 26 | `0x2F9E0` | `0x2FAD3` |
+| 27 | `0x2FAD4` | `0x2FBC7` |
+| 28 | `0x2FBC8` | `0x2FCBB` |
+| 29 | `0x2FCBC` | `0x2FDAF` |
+| 30 | `0x2FDB0` | `0x2FEA3` |
+| 31 | `0x2FEA4` | `0x2FF97` |
+| 32 | `0x2FF98` | `0x3008B` |
+| 33 | `0x3008C` | `0x3017F` |
+| 34 | `0x30180` | `0x30273` |
+| 35 | `0x30274` | `0x30367` |
+| 36 | `0x30368` | `0x3045B` |
+| 37 | `0x3045C` | `0x3054F` |
+| 38 | `0x30550` | `0x30643` |
+| 39 | `0x30644` | `0x30737` |
+| 40 | `0x30738` | `0x3082B` |
+| 41 | `0x3082C` | `0x3091F` |
+| 42 | `0x30920` | `0x30A13` |
+| 43 | `0x30A14` | `0x30B07` |
+| 44 | `0x30B08` | `0x30BFB` |
+| 45 | `0x30BFC` | `0x30CEF` |
+| 46 | `0x30CF0` | `0x30DE3` |
+| 47 | `0x30DE4` | `0x30ED7` |
+| 48 | `0x30ED8` | `0x30FCB` |
+| 49 | `0x30FCC` | `0x310BF` |
+| 50 | `0x310C0` | `0x311B3` |
+
+**Page 3 (Slots 51-75): `0x311B4` - `0x32987`**
+
+| Slot | Start | End |
+|------|-------|-----|
+| 51 | `0x311B4` | `0x312A7` |
+| 52 | `0x312A8` | `0x3139B` |
+| 53 | `0x3139C` | `0x3148F` |
+| 54 | `0x31490` | `0x31583` |
+| 55 | `0x31584` | `0x31677` |
+| 56 | `0x31678` | `0x3176B` |
+| 57 | `0x3176C` | `0x3185F` |
+| 58 | `0x31860` | `0x31953` |
+| 59 | `0x31954` | `0x31A47` |
+| 60 | `0x31A48` | `0x31B3B` |
+| 61 | `0x31B3C` | `0x31C2F` |
+| 62 | `0x31C30` | `0x31D23` |
+| 63 | `0x31D24` | `0x31E17` |
+| 64 | `0x31E18` | `0x31F0B` |
+| 65 | `0x31F0C` | `0x31FFF` |
+| 66 | `0x32000` | `0x320F3` |
+| 67 | `0x320F4` | `0x321E7` |
+| 68 | `0x321E8` | `0x322DB` |
+| 69 | `0x322DC` | `0x323CF` |
+| 70 | `0x323D0` | `0x324C3` |
+| 71 | `0x324C4` | `0x325B7` |
+| 72 | `0x325B8` | `0x326AB` |
+| 73 | `0x326AC` | `0x3279F` |
+| 74 | `0x327A0` | `0x32893` |
+| 75 | `0x32894` | `0x32987` |
 
 ---
 
-## Known Sender Examples
+## Stationery Reference
 
-| Sender | Hex Data |
-|--------|----------|
-| Nintendo from Redmond | `91 F2 12 1F 1E 27 29 28 1E 00 C9 F9 0E 23 28 2E 1F 28 1E 29` (slot 0x00) |
-| Tortimer | `91 F2 12 1F 1E 27 29 28 1E 00 D8 B1 14 29 2C 2E 23 27 1F 2C` (slot 0x01) |
-| Sean from Bastok | `17 F5 02 1B 2D 2E 29 25 00 00 A4 E4 13 1F 1B 28 00 00 00 00` |
+The stationery ID at offset `0xED` maps to one of 64 paper backgrounds (values 0-63).
+
+| ID | Hex | Item Hex | Name |
+|----|-----|----------|------|
+| 0 | `0x00` | `0x1000` | Butterfly paper |
+| 1 | `0x01` | `0x1004` | Airmail paper |
+| 2 | `0x02` | `0x1008` | New year's cards |
+| 3 | `0x03` | `0x100C` | Lacy paper |
+| 4 | `0x04` | `0x1010` | Cloudy paper |
+| 5 | `0x05` | `0x1014` | Petal paper |
+| 6 | `0x06` | `0x1018` | Snowy paper |
+| 7 | `0x07` | `0x101C` | Maple-leaf paper |
+| 8 | `0x08` | `0x1020` | Lined paper |
+| 9 | `0x09` | `0x1024` | Notebook paper |
+| 10 | `0x0A` | `0x1028` | Flowery paper |
+| 11 | `0x0B` | `0x102C` | Polka-dot paper |
+| 12 | `0x0C` | `0x1030` | Bottle paper (not in catalog) |
+| 13 | `0x0D` | `0x1034` | Ribbon paper |
+| 14 | `0x0E` | `0x1038` | Sparkly paper |
+| 15 | `0x0F` | `0x103C` | Vine paper |
+| 16 | `0x10` | `0x1040` | Formal paper |
+| 17 | `0x11` | `0x1044` | Snowman paper |
+| 18 | `0x12` | `0x1048` | Card paper |
+| 19 | `0x13` | `0x104C` | Leopard paper |
+| 20 | `0x14` | `0x1050` | Cow paper |
+| 21 | `0x15` | `0x1054` | Camouflage paper |
+| 22 | `0x16` | `0x1058` | Hamburger paper |
+| 23 | `0x17` | `0x105C` | Piano paper |
+| 24 | `0x18` | `0x1060` | Nook paper |
+| 25 | `0x19` | `0x1064` | Fox paper |
+| 26 | `0x1A` | `0x1068` | Birthday cards |
+| 27 | `0x1B` | `0x106C` | Four-leaf paper |
+| 28 | `0x1C` | `0x1070` | Town-hall paper |
+| 29 | `0x1D` | `0x1074` | Tortimer paper |
+| 30 | `0x1E` | `0x1078` | Insurance paper |
+| 31 | `0x1F` | `0x107C` | Academy paper |
+| 32 | `0x20` | `0x1080` | Lovely paper |
+| 33 | `0x21` | `0x1084` | Rainbow paper |
+| 34 | `0x22` | `0x1088` | Egyptian paper |
+| 35 | `0x23` | `0x108C` | Lotus paper |
+| 36 | `0x24` | `0x1090` | Tile paper |
+| 37 | `0x25` | `0x1094` | Mosaic paper |
+| 38 | `0x26` | `0x1098` | Elegant paper |
+| 39 | `0x27` | `0x109C` | Town view paper |
+| 40 | `0x28` | `0x10A0` | Chinese paper |
+| 41 | `0x29` | `0x10A4` | Ocean paper |
+| 42 | `0x2A` | `0x10A8` | Industrial paper |
+| 43 | `0x2B` | `0x10AC` | Fireworks paper |
+| 44 | `0x2C` | `0x10B0` | Floral paper |
+| 45 | `0x2D` | `0x10B4` | Mushroom paper |
+| 46 | `0x2E` | `0x10B8` | Star paper |
+| 47 | `0x2F` | `0x10BC` | Composer paper |
+| 48 | `0x30` | `0x10C0` | Bathtub paper |
+| 49 | `0x31` | `0x10C4` | SMB3 paper |
+| 50 | `0x32` | `0x10C8` | Cool paper |
+| 51 | `0x33` | `0x10CC` | Forest paper |
+| 52 | `0x34` | `0x10D0` | Bubble paper |
+| 53 | `0x35` | `0x10D4` | Buttercup paper |
+| 54 | `0x36` | `0x10D8` | Tartan paper |
+| 55 | `0x37` | `0x10DC` | Plaid paper |
+| 56 | `0x38` | `0x10E0` | Lemon-lime paper |
+| 57 | `0x39` | `0x10E4` | Crater paper |
+| 58 | `0x3A` | `0x10E8` | Bejeweled paper |
+| 59 | `0x3B` | `0x10EC` | Geometric paper |
+| 60 | `0x3C` | `0x10F0` | Southwest paper |
+| 61 | `0x3D` | `0x10F4` | Night sky paper |
+| 62 | `0x3E` | `0x10F8` | Chic paper |
+| 63 | `0x3F` | `0x10FC` | Goldfish paper |
 
 ---
 
-## Notes
+## Appendix
 
-- The save file contains both primary and backup copies of letter data
-- There is a header region at `0x1124-0x1157` before inventory letters
-- Mailbox slot 10 sometimes ends with `00 00 33 00 00 00` instead of zeros
-- A 4-byte buffer (`00 00 00 00`) separates each player's mailbox section
-- Item hex codes reference: https://animalcrossing1097.wixsite.com/animalcrossingblog/acww_ar_item_hex_codes
+### Known Sender Examples
+
+Example raw hex data showing sender information patterns:
+
+| Sender | Raw Hex Data |
+|--------|--------------|
+| Nintendo (Redmond) | `91 F2 12 1F 1E 27 29 28 1E 00 C9 F9 0E 23 28 2E 1F 28 1E 29` |
+| Tortimer | `91 F2 12 1F 1E 27 29 28 1E 00 D8 B1 14 29 2C 2E 23 27 1F 2C` |
+| Player "Sean" from "Bastok" | `17 F5 02 1B 2D 2E 29 25 00 00 A4 E4 13 1F 1B 28 00 00 00 00` |
+
+### Additional Notes
+
+- **Header region**: There is a header region at `0x1120-0x1153` before inventory letters
+- **Attached item field**: Located at offset `0xF0` (not `0xEC` as in some older documentation)
+- **Item hex codes reference**: https://animalcrossing1097.wixsite.com/animalcrossingblog/acww_ar_item_hex_codes
+
+### Hex Notation Convention
+
+All hex values in this document use the `0x` prefix for clarity:
+- Addresses: `0x1154` (not `1154` or `$1154`)
+- Single bytes: `0x42` (not `42h` or `$42`)
+- Multi-byte values: shown as space-separated bytes (e.g., `00 00 03 00`)
