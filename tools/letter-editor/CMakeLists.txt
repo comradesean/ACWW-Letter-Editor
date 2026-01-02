@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(letter-previewer LANGUAGES CXX)
+project(letter-editor LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,10 +42,10 @@ set(RESOURCES
 )
 
 # Create executable
-add_executable(letter-previewer ${SOURCES} ${HEADERS} ${RESOURCES})
+add_executable(letter-editor ${SOURCES} ${HEADERS} ${RESOURCES})
 
 # Link Qt libraries
-target_link_libraries(letter-previewer
+target_link_libraries(letter-editor
     Qt5::Core
     Qt5::Gui
     Qt5::Qml
@@ -54,4 +54,4 @@ target_link_libraries(letter-previewer
 )
 
 # Include directories
-target_include_directories(letter-previewer PRIVATE src)
+target_include_directories(letter-editor PRIVATE src)

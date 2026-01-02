@@ -1,6 +1,6 @@
-# ACWW Letter Previewer
+# ACWW Letter Editor
 
-A Qt5 application that extracts letter backgrounds and fonts from an Animal Crossing: Wild World NDS ROM and provides a live preview with editable text.
+A Qt5 application for editing letters in Animal Crossing: Wild World save files. Extracts stationery and fonts from the ROM for authentic preview rendering.
 
 ## Features
 
@@ -49,13 +49,13 @@ make
 
 ### Using qmake:
 ```bash
-qmake letter-previewer.pro
+qmake letter-editor.pro
 make
 ```
 
 ## Usage
 
-1. Run the application: `./letter-previewer`
+1. Run the application: `./letter-editor`
 2. A file dialog will open - select your ACWW ROM file (*.nds)
 3. Select a stationery background from the dropdown
 4. Click on the letter preview and start typing

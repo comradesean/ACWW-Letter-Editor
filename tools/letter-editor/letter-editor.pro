@@ -1,7 +1,7 @@
 QT += core gui qml quick quickcontrols2
 CONFIG += c++17
 
-TARGET = letter-previewer
+TARGET = letter-editor
 TEMPLATE = app
 
 SOURCES += \
