@@ -14,7 +14,11 @@ class LetterCanvasItem : public QQuickPaintedItem {
     Q_OBJECT
     Q_PROPERTY(Backend* backend READ backend WRITE setBackend NOTIFY backendChanged)
     Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
+    Q_PROPERTY(QString header READ header NOTIFY textChanged)
+    Q_PROPERTY(QString body READ body NOTIFY textChanged)
+    Q_PROPERTY(QString footer READ footer NOTIFY textChanged)
     Q_PROPERTY(int cursorPosition READ cursorPosition WRITE setCursorPosition NOTIFY cursorPositionChanged)
+    Q_PROPERTY(int currentSection READ currentSection NOTIFY currentSectionChanged)
     Q_PROPERTY(bool cursorVisible READ cursorVisible NOTIFY cursorVisibleChanged)
     Q_PROPERTY(int selectionStart READ selectionStart NOTIFY selectionChanged)
     Q_PROPERTY(int selectionEnd READ selectionEnd NOTIFY selectionChanged)
@@ -28,17 +32,28 @@ public:
     Backend* backend() const { return m_backend; }
     void setBackend(Backend* backend);
 
-    QString text() const { return m_text; }
+    // Combined text for backward compatibility
+    QString text() const;
     void setText(const QString& text);
 
-    int cursorPosition() const { return m_cursorPos; }
+    // Separate field accessors
+    QString header() const { return m_header; }
+    QString body() const { return m_body; }
+    QString footer() const { return m_footer; }
+
+    // Cursor position (global, for backward compatibility)
+    int cursorPosition() const;
     void setCursorPosition(int pos);
+
+    // Current section (0=header, 1=body, 2=footer)
+    int currentSection() const { return m_currentSection; }
 
     bool cursorVisible() const { return m_cursorVisible; }
 
-    int selectionStart() const { return m_selectionStart; }
-    int selectionEnd() const { return m_selectionEnd; }
-    bool hasSelection() const { return m_selectionStart >= 0 && m_selectionEnd >= 0 && m_selectionStart != m_selectionEnd; }
+    // Selection (global positions for backward compatibility)
+    int selectionStart() const;
+    int selectionEnd() const;
+    bool hasSelection() const;
 
     Q_INVOKABLE void startSelection(qreal x, qreal y);
     Q_INVOKABLE void updateSelection(qreal x, qreal y);
@@ -74,6 +89,7 @@ signals:
     void backendChanged();
     void textChanged();
     void cursorPositionChanged();
+    void currentSectionChanged();
     void cursorVisibleChanged();
     void selectionChanged();
     void recipientNameClicked();
@@ -95,31 +111,43 @@ private:
                                   int selStart = -1, int selEnd = -1,
                                   const QColor& selectionColor = QColor());
 
-    // Text structure helpers (text = "header\nbody\nfooter")
-    int getSection(int pos) const;  // 0=header, 1=body, 2=footer
-    int getBodyStartPos() const;
-    int getFooterStartPos() const;
-    QString getHeader() const;
-    QString getBody() const;
-    QString getFooter() const;
+    // Section text accessor (returns reference for modification)
+    QString& sectionText(int section);
+    const QString& sectionText(int section) const;
 
-    // Body wrapping - returns (lineText, startPosInBody) pairs
+    // Position conversion helpers
+    int sectionPosToGlobal(int section, int posInSection) const;
+    void globalPosToSection(int globalPos, int& outSection, int& outPosInSection) const;
+
+    // Body helpers
+    int countLogicalBodyLines() const;
     QVector<QPair<QString, int>> wrapBodyText() const;
 
     // Click handling helper
     int findCharPosAtX(const QString& text, int targetX, int startX, const FontLoader& font) const;
 
-    // Selection helper - convert widget coordinates to text position
-    int charPosFromPoint(qreal x, qreal y) const;
+    // Convert widget coordinates to section and position
+    void charPosFromPoint(qreal x, qreal y, int& outSection, int& outPosInSection) const;
 
     Backend* m_backend = nullptr;
-    QString m_text;
-    int m_cursorPos = 0;
+
+    // Separate text storage
+    QString m_header;
+    QString m_body;
+    QString m_footer;
+
+    // Section-aware cursor
+    int m_currentSection = 0;      // 0=header, 1=body, 2=footer
+    int m_cursorPosInSection = 0;
+
+    // Section-aware selection (constrained to single section)
+    int m_selectionSection = -1;
+    int m_selectionStartInSection = -1;
+    int m_selectionEndInSection = -1;
+    int m_selectionAnchorInSection = -1;
+
     bool m_cursorVisible = true;
     QTimer m_cursorTimer;
-    int m_selectionStart = -1;
-    int m_selectionEnd = -1;
-    int m_selectionAnchor = -1;  // Fixed point of selection during drag
 
     // Use shared constants from letterconstants.h
     static constexpr int HEADER_LEFT = LetterConstants::HEADER_LEFT;
