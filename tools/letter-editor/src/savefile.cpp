@@ -87,11 +87,15 @@ static const uint32_t BANK_PLAYER1_START = 0x2E210;
 static const uint32_t BANK_PLAYER_STRIDE = 0x4778;  // Offset between players
 
 // Player name offsets (within player data block)
+// EUR/USA: Name is at offset 0x2282 within each player's 0x228C byte block
+static const uint32_t PLAYER_NAME_OFFSET_EUR = 0x2282;
+static const uint32_t PLAYER_DATA_SIZE = 0x228C;
+
 static const uint32_t PLAYER_NAME_OFFSETS[4] = {
-    0x000C,   // Player 1 name at save offset 0x000C
-    0x228C + 0x000C,   // Player 2
-    0x228C * 2 + 0x000C,   // Player 3
-    0x228C * 3 + 0x000C    // Player 4
+    PLAYER_NAME_OFFSET_EUR,                           // Player 1
+    PLAYER_DATA_SIZE + PLAYER_NAME_OFFSET_EUR,        // Player 2
+    PLAYER_DATA_SIZE * 2 + PLAYER_NAME_OFFSET_EUR,    // Player 3
+    PLAYER_DATA_SIZE * 3 + PLAYER_NAME_OFFSET_EUR     // Player 4
 };
 
 // Region data
