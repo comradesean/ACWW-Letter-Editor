@@ -676,6 +676,49 @@ ApplicationWindow {
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    clip: true
+
+                    // Animated tiled cloth background
+                    Item {
+                        id: clothBackground
+                        anchors.fill: parent
+
+                        // Properties for animation
+                        property real offsetX: 0
+                        property real offsetY: 0
+
+                        // Animation that moves the pattern up and left
+                        NumberAnimation on offsetX {
+                            from: 0
+                            to: -32  // Width of one tile
+                            duration: 3000
+                            loops: Animation.Infinite
+                        }
+                        NumberAnimation on offsetY {
+                            from: 0
+                            to: -32  // Height of one tile
+                            duration: 3000
+                            loops: Animation.Infinite
+                        }
+
+                        // Create a grid of tiled images larger than the container
+                        // to allow seamless scrolling
+                        Grid {
+                            x: clothBackground.offsetX
+                            y: clothBackground.offsetY
+                            columns: Math.ceil(parent.width / 32) + 2
+                            rows: Math.ceil(parent.height / 32) + 2
+
+                            Repeater {
+                                model: parent.columns * parent.rows
+                                Image {
+                                    source: "qrc:/images/cloth.png"
+                                    width: 32
+                                    height: 32
+                                }
+                            }
+                        }
+                    }
 
                     // Focus ring
                     Rectangle {
