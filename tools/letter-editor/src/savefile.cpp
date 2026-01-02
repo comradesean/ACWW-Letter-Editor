@@ -86,16 +86,19 @@ static const uint32_t MAILBOX_BACKUP_OFFSETS[4][10] = {
 static const uint32_t BANK_PLAYER1_START = 0x2E210;
 static const uint32_t BANK_PLAYER_STRIDE = 0x4778;  // Offset between players
 
-// Player name offsets (within player data block)
-// EUR/USA: Name is at offset 0x2282 within each player's 0x228C byte block
-static const uint32_t PLAYER_NAME_OFFSET_EUR = 0x2282;
+// Player data structure offsets (EUR/USA)
+// Player data starts at 0x0C in the save file
+// Each player block is 0x228C bytes
+// Player name is at offset 0x2282 within each player's block
+static const uint32_t PLAYER_DATA_START = 0x0C;
 static const uint32_t PLAYER_DATA_SIZE = 0x228C;
+static const uint32_t PLAYER_NAME_OFFSET_EUR = 0x2282;
 
 static const uint32_t PLAYER_NAME_OFFSETS[4] = {
-    PLAYER_NAME_OFFSET_EUR,                           // Player 1
-    PLAYER_DATA_SIZE + PLAYER_NAME_OFFSET_EUR,        // Player 2
-    PLAYER_DATA_SIZE * 2 + PLAYER_NAME_OFFSET_EUR,    // Player 3
-    PLAYER_DATA_SIZE * 3 + PLAYER_NAME_OFFSET_EUR     // Player 4
+    PLAYER_DATA_START + PLAYER_NAME_OFFSET_EUR,                           // Player 1: 0x228E
+    PLAYER_DATA_START + PLAYER_DATA_SIZE + PLAYER_NAME_OFFSET_EUR,        // Player 2: 0x451A
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 2 + PLAYER_NAME_OFFSET_EUR,    // Player 3: 0x67A6
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 3 + PLAYER_NAME_OFFSET_EUR     // Player 4: 0x8A32
 };
 
 // Region data
