@@ -14,6 +14,11 @@ namespace LetterConstants {
     constexpr int GLYPH_SPACING = 1;
     constexpr int MAX_LINE_WIDTH = 150;
     constexpr int MAX_FOOTER_WIDTH = 160;
+
+    // NAME_TOKEN_WIDTH is used for VALIDATION ONLY - it defines how much "space budget"
+    // the recipient name consumes when determining if more characters can fit in the header.
+    // Visual rendering (cursor position, selection, click detection) uses actual character
+    // widths from the font, not this constant.
     constexpr int NAME_TOKEN_WIDTH = 55;
 
     // Character limits
