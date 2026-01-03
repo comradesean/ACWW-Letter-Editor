@@ -37,8 +37,9 @@ inline const char* acwwCharTable[256] = {
     "'", "'", """, """, "•", "–", "—", "˜", "™", "›", " ", "¡", "¢", "£", "¤", "¥",
     // 0xC0-0xCF: Currency, legal, fractions
     "¦", "§", "¨", "©", "ª", "«", "¬", "-", "®", "¯", "°", "±", "²", "³", "´", "µ",
-    // 0xD0-0xDF: More special chars, h, star, heart, music note
-    "¶", "·", "¸", "¹", "º", "»", "¼", "½", "¾", "¿", "×", "÷", "h", "★", "❤", "♪",
+    // 0xD0-0xDF: More special chars, droplet, star, heart, music note
+    // Note: 0xDC uses PUA U+E000 internally, mapped to 💧 emoji for display
+    "¶", "·", "¸", "¹", "º", "»", "¼", "½", "¾", "¿", "×", "÷", "\xEE\x80\x80", "★", "❤", "♪",
     // 0xE0-0xEF: Unused/reserved
     " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",
     // 0xF0-0xFF: Unused/reserved
@@ -61,19 +62,31 @@ inline QByteArray encodeAcwwText(const QString& text, int maxLen) {
     QByteArray result(maxLen, 0);
     int pos = 0;
 
-    for (int i = 0; i < text.length() && pos < maxLen; i++) {
-        QChar ch = text[i];
+    int i = 0;
+    while (i < text.length() && pos < maxLen) {
+        QString ch;
+
+        // Check for surrogate pair (emoji)
+        if (text[i].isHighSurrogate() && i + 1 < text.length() &&
+            QChar(text[i + 1]).isLowSurrogate()) {
+            ch = text.mid(i, 2);
+            i += 2;
+        } else {
+            ch = QString(text[i]);
+            i++;
+        }
+
         uint8_t encoded = 0x85; // Default to space
 
         // Find the character in the encoding table
-        if (ch == '\n') {
+        if (ch == "\n") {
             encoded = 0x86; // Newline
-        } else if (ch == ' ') {
+        } else if (ch == " ") {
             encoded = 0x85; // Space
         } else {
             // Search for matching character
             for (int j = 1; j < 256; j++) {
-                if (QString::fromUtf8(acwwCharTable[j]) == QString(ch)) {
+                if (QString::fromUtf8(acwwCharTable[j]) == ch) {
                     encoded = static_cast<uint8_t>(j);
                     break;
                 }

@@ -161,14 +161,23 @@ void FontLoader::buildCharacterMap() {
     for (const auto& pair : m_glyphs) {
         uint16_t code = pair.first;
         if (code > 0 && code < 0x100) {
-            m_charMap[QChar(code)] = {false, code};  // useSubFont=false
+            m_charMap[code] = {false, code};  // useSubFont=false
         }
     }
+
+    // Map extended characters where Unicode code point differs from fontA glyph code
+    // fontA uses Windows-1252/Latin-1 compatible glyph positions
+    m_charMap[0x2022] = {false, 0x95};  // • BULLET (Windows-1252 position)
+    m_charMap[0x0152] = {false, 0x8C};  // Œ LATIN CAPITAL LIGATURE OE
+    m_charMap[0x0153] = {false, 0x9C};  // œ LATIN SMALL LIGATURE OE
+    m_charMap[0x20AC] = {false, 0x80};  // € EURO SIGN
+    m_charMap[0x03B2] = {false, 0xDF};  // β GREEK SMALL LETTER BETA (using ß position)
+    m_charMap[0x203E] = {false, 0xAF};  // ‾ OVERLINE (using macron ¯ as substitute)
 
     // Map special characters from fontASub
     // fontASub glyph layout (verified by testing):
     //   0x20 = space/empty
-    //   0x21 = water droplet
+    //   0x21 = water droplet 💧
     //   0x22 = return symbol
     //   0x23 = x symbol
     //   0x24 = star ★
@@ -177,9 +186,11 @@ void FontLoader::buildCharacterMap() {
     //   0x27 = music note ♪
     if (!m_subGlyphs.empty()) {
         // Map Unicode special characters to fontASub glyph codes
-        m_charMap[QChar(0x2605)] = {true, 0x24};  // ★ BLACK STAR
-        m_charMap[QChar(0x2764)] = {true, 0x26};  // ❤ HEAVY BLACK HEART
-        m_charMap[QChar(0x266A)] = {true, 0x27};  // ♪ EIGHTH NOTE
+        m_charMap[0x2605] = {true, 0x24};   // ★ BLACK STAR
+        m_charMap[0x2764] = {true, 0x26};   // ❤ HEAVY BLACK HEART
+        m_charMap[0x266A] = {true, 0x27};   // ♪ EIGHTH NOTE
+        m_charMap[0xE000] = {true, 0x21};   // 💧 DROPLET (stored as PUA U+E000)
+        m_charMap[0x1F4A7] = {true, 0x21};  // 💧 DROPLET (for paste detection)
 
         qDebug() << "fontASub special character mappings enabled";
     }
@@ -188,7 +199,8 @@ void FontLoader::buildCharacterMap() {
 }
 
 bool FontLoader::hasGlyph(QChar ch) const {
-    auto mapIt = m_charMap.find(ch);
+    uint32_t cp = ch.unicode();
+    auto mapIt = m_charMap.find(cp);
     if (mapIt == m_charMap.end()) {
         return false;
     }
@@ -202,7 +214,8 @@ bool FontLoader::hasGlyph(QChar ch) const {
 }
 
 const GlyphInfo* FontLoader::getGlyph(QChar ch) const {
-    auto mapIt = m_charMap.find(ch);
+    uint32_t cp = ch.unicode();
+    auto mapIt = m_charMap.find(cp);
     if (mapIt == m_charMap.end()) {
         return nullptr;
     }

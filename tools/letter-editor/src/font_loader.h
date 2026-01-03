@@ -43,12 +43,13 @@ private:
     // fontASub glyphs (special characters: star, heart, music note, etc.)
     std::map<uint16_t, GlyphInfo> m_subGlyphs;  // glyph code -> glyph info
 
-    // Unicode character -> font source and glyph code
+    // Unicode code point -> font source and glyph code
+    // Uses uint32_t to support emoji/supplementary plane characters
     struct GlyphMapping {
         bool useSubFont;   // true = fontASub, false = fontA
         uint16_t glyphCode;
     };
-    std::map<QChar, GlyphMapping> m_charMap;
+    std::map<uint32_t, GlyphMapping> m_charMap;
 
     // fontA data
     std::vector<uint16_t> m_charCodes;
