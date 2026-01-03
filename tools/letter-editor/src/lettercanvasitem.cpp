@@ -232,8 +232,12 @@ QVector<QPair<QString, int>> LetterCanvasItem::wrapBodyText() const {
 }
 
 void LetterCanvasItem::insertChar(const QString& ch) {
-    if (!ch.isEmpty() && ch[0].isPrint() && ch[0].unicode() < 128) {
-        if (!m_backend || !m_backend->isLoaded()) return;
+    if (!m_backend || !m_backend->isLoaded()) return;
+    if (ch.isEmpty() || !ch[0].isPrint()) return;
+
+    // Allow printable ASCII and special characters supported by the ACWW font
+    bool isValidChar = ch[0].unicode() < 128 || m_backend->font().hasGlyph(ch[0]);
+    if (isValidChar) {
 
         // If there's a selection, delete it first
         if (hasSelection()) {
@@ -252,14 +256,15 @@ void LetterCanvasItem::insertChar(const QString& ch) {
             if (headerLenWithoutName >= MAX_HEADER_CHARS) return;
 
             // Check pixel width limit
+            // NAME_TOKEN_WIDTH is always reserved for the name placeholder
             QString testHeader = m_header;
             testHeader.insert(m_cursorPosInSection, ch);
-            int testWidth = 0;
+            int testWidth = NAME_TOKEN_WIDTH;
             const FontLoader& font = m_backend->font();
             for (int i = 0; i < testHeader.length(); i++) {
+                // Skip recipient name characters - their space is already reserved
                 if (recipientStart >= 0 && recipientEnd >= 0 &&
                     i >= recipientStart && i < recipientEnd + 1) {
-                    if (i == recipientStart) testWidth += NAME_TOKEN_WIDTH;
                     continue;
                 }
                 testWidth += font.charWidth(testHeader[i]) + GLYPH_SPACING;
@@ -783,13 +788,14 @@ int LetterCanvasItem::calculateHeaderWidth(const QString& newRecipientName) cons
     int recipientStart = m_backend->recipientNameStart();
     int recipientEnd = m_backend->recipientNameEnd();
 
-    int totalWidth = 0;
+    // NAME_TOKEN_WIDTH is always reserved for the name placeholder
+    int totalWidth = NAME_TOKEN_WIDTH;
     const FontLoader& font = m_backend->font();
     bool hasName = (recipientStart >= 0 && recipientEnd >= 0 && recipientEnd <= m_header.length());
 
     for (int i = 0; i < m_header.length(); i++) {
+        // Skip recipient name characters - their space is already reserved
         if (hasName && i >= recipientStart && i < recipientEnd) {
-            if (i == recipientStart) totalWidth += NAME_TOKEN_WIDTH;
             continue;
         }
         totalWidth += font.charWidth(m_header[i]) + GLYPH_SPACING;
@@ -1361,7 +1367,8 @@ void LetterCanvasItem::paste() {
                 }
                 newLine();
             }
-        } else if (ch.isPrint() && ch.unicode() < 128) {
+        } else if (ch.isPrint()) {
+            // insertChar handles validation including special character support
             insertChar(QString(ch));
         }
     }

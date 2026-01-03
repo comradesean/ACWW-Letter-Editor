@@ -44,6 +44,7 @@ public:
     // File operations
     Q_INVOKABLE bool load(const QString& path);
     Q_INVOKABLE bool save(const QString& path = QString());
+    Q_INVOKABLE void close();
 
     // Properties
     bool isLoaded() const { return m_loaded; }
@@ -63,6 +64,7 @@ public:
     // Letter access
     Q_INVOKABLE Letter getLetter(int player, int storageType, int slot) const;
     Q_INVOKABLE void setLetter(int player, int storageType, int slot, const Letter& letter);
+    Q_INVOKABLE QByteArray getRawLetterBytes(int player, int storageType, int slot) const;
 
     // Slot counts
     Q_INVOKABLE int getSlotCount(int storageType) const;

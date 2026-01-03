@@ -2,11 +2,19 @@
 #include "nds_rom.h"
 #include "lz77.h"
 #include <QColor>
+#include <QDebug>
+
+// Note: The font file uses ASCII-like glyph encoding (A=0x41, B=0x42, etc.)
+// This is DIFFERENT from ACWW letter text encoding (A=0x01, B=0x02, etc.)
+// The letter text encoding table (acwwCharTable) is defined in backend.cpp,
+// letter.cpp, and savefile.cpp where it's used for decoding/encoding letter data.
 
 bool FontLoader::load(NDSRom& rom) {
     if (!loadFontA(rom)) {
         return false;
     }
+    // fontASub is optional - contains special symbols (heart, star, music note)
+    loadFontASub(rom);
     buildCharacterMap();
     return true;
 }
@@ -76,40 +84,143 @@ bool FontLoader::loadFontA(NDSRom& rom) {
     return true;
 }
 
-void FontLoader::buildCharacterMap() {
-    // Build ASCII to ACWW character code mapping
-    // Based on the character codes from fontA which uses ASCII-like encoding
-    m_asciiToAcww.clear();
+bool FontLoader::loadFontASub(NDSRom& rom) {
+    auto headData = rom.readFile("/font/fontASub_head.bin");
+    auto attrData = rom.readFile("/font/fontASub_attr.bin");
+    auto imgData = rom.readFile("/font/fontASub_img.bin");
 
-    for (size_t i = 0; i < m_charCodes.size(); i++) {
-        uint16_t code = m_charCodes[i];
-        // ACWW uses mostly ASCII-compatible codes for basic characters
-        if (code >= 0x20 && code < 0x7F) {
-            m_asciiToAcww[QChar(code)] = code;
+    if (headData.empty() || attrData.empty() || imgData.empty()) {
+        qDebug() << "fontASub not found, special characters will not be available";
+        return false;
+    }
+
+    if (LZ77::isCompressed(headData)) headData = LZ77::decompress(headData);
+    if (LZ77::isCompressed(attrData)) attrData = LZ77::decompress(attrData);
+    if (LZ77::isCompressed(imgData)) imgData = LZ77::decompress(imgData);
+
+    // Parse header
+    m_subNumChars = headData[0] | (headData[1] << 8);
+
+    // Parse attributes (4 bytes per char: char code + width)
+    m_subCharCodes.clear();
+    m_subCharWidths.clear();
+    for (int i = 0; i < m_subNumChars && i * 4 + 3 < static_cast<int>(attrData.size()); i++) {
+        uint16_t charCode = attrData[i * 4] | (attrData[i * 4 + 1] << 8);
+        uint16_t width = attrData[i * 4 + 2] | (attrData[i * 4 + 3] << 8);
+        m_subCharCodes.push_back(charCode);
+        m_subCharWidths.push_back(static_cast<uint8_t>(width));
+    }
+
+    m_subImgData = imgData;
+
+    // Build glyph images for fontASub
+    int bytesPerGlyph = (GLYPH_WIDTH * GLYPH_HEIGHT) / 8;  // 1bpp
+
+    for (int g = 0; g < m_subNumChars; g++) {
+        int glyphDataOffset = g * bytesPerGlyph;
+        if (glyphDataOffset + bytesPerGlyph > static_cast<int>(m_subImgData.size())) continue;
+
+        QImage glyphMask(GLYPH_WIDTH, GLYPH_HEIGHT, QImage::Format_ARGB32);
+        glyphMask.fill(Qt::transparent);
+
+        // Decode 1bpp glyph (MSB first, row-major) - store as white mask
+        for (int py = 0; py < GLYPH_HEIGHT; py++) {
+            for (int px = 0; px < GLYPH_WIDTH; px++) {
+                int bitIdx = py * GLYPH_WIDTH + px;
+                int byteIdx = bitIdx / 8;
+                int bitOffset = 7 - (bitIdx % 8);  // MSB first
+
+                uint8_t byte = m_subImgData[glyphDataOffset + byteIdx];
+                uint8_t bit = (byte >> bitOffset) & 1;
+
+                if (bit) {
+                    glyphMask.setPixelColor(px, py, QColor(255, 255, 255, 255));  // White mask
+                }
+            }
+        }
+
+        GlyphInfo info;
+        info.index = g;
+        info.displayWidth = m_subCharWidths[g];
+        info.mask = glyphMask;
+
+        m_subGlyphs[m_subCharCodes[g]] = info;
+    }
+
+    qDebug() << "fontASub loaded:" << m_subNumChars << "special character glyphs";
+    return true;
+}
+
+void FontLoader::buildCharacterMap() {
+    // Build Unicode to font glyph code mapping
+    // fontA uses ASCII-like glyph codes (A=0x41, etc.)
+    // fontASub contains special symbols at codes 0x20-0x27
+    m_charMap.clear();
+
+    // Map fontA glyphs (ASCII/Latin-1 characters)
+    for (const auto& pair : m_glyphs) {
+        uint16_t code = pair.first;
+        if (code > 0 && code < 0x100) {
+            m_charMap[QChar(code)] = {false, code};  // useSubFont=false
         }
     }
+
+    // Map special characters from fontASub
+    // fontASub glyph layout (verified by testing):
+    //   0x20 = space/empty
+    //   0x21 = water droplet
+    //   0x22 = return symbol
+    //   0x23 = x symbol
+    //   0x24 = star ★
+    //   0x25 = right arrow
+    //   0x26 = heart ❤
+    //   0x27 = music note ♪
+    if (!m_subGlyphs.empty()) {
+        // Map Unicode special characters to fontASub glyph codes
+        m_charMap[QChar(0x2605)] = {true, 0x24};  // ★ BLACK STAR
+        m_charMap[QChar(0x2764)] = {true, 0x26};  // ❤ HEAVY BLACK HEART
+        m_charMap[QChar(0x266A)] = {true, 0x27};  // ♪ EIGHTH NOTE
+
+        qDebug() << "fontASub special character mappings enabled";
+    }
+
+    qDebug() << "Font has" << m_glyphs.size() << "main glyphs and" << m_subGlyphs.size() << "special glyphs";
 }
 
 bool FontLoader::hasGlyph(QChar ch) const {
-    auto it = m_asciiToAcww.find(ch);
-    if (it == m_asciiToAcww.end()) {
+    auto mapIt = m_charMap.find(ch);
+    if (mapIt == m_charMap.end()) {
         return false;
     }
-    return m_glyphs.find(it->second) != m_glyphs.end();
+
+    const auto& mapping = mapIt->second;
+    if (mapping.useSubFont) {
+        return m_subGlyphs.find(mapping.glyphCode) != m_subGlyphs.end();
+    } else {
+        return m_glyphs.find(mapping.glyphCode) != m_glyphs.end();
+    }
 }
 
 const GlyphInfo* FontLoader::getGlyph(QChar ch) const {
-    auto asciiIt = m_asciiToAcww.find(ch);
-    if (asciiIt == m_asciiToAcww.end()) {
+    auto mapIt = m_charMap.find(ch);
+    if (mapIt == m_charMap.end()) {
         return nullptr;
     }
 
-    auto glyphIt = m_glyphs.find(asciiIt->second);
-    if (glyphIt == m_glyphs.end()) {
-        return nullptr;
+    const auto& mapping = mapIt->second;
+    if (mapping.useSubFont) {
+        auto glyphIt = m_subGlyphs.find(mapping.glyphCode);
+        if (glyphIt == m_subGlyphs.end()) {
+            return nullptr;
+        }
+        return &glyphIt->second;
+    } else {
+        auto glyphIt = m_glyphs.find(mapping.glyphCode);
+        if (glyphIt == m_glyphs.end()) {
+            return nullptr;
+        }
+        return &glyphIt->second;
     }
-
-    return &glyphIt->second;
 }
 
 int FontLoader::charWidth(QChar ch) const {

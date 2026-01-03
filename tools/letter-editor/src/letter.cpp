@@ -3,23 +3,43 @@
 
 // ACWW Western character encoding table (256 entries)
 // Maps byte values 0x00-0xFF to Unicode characters
+// Note: Some characters have alternate interpretations:
+//   0x3F: ⨍ (script f) - could also be ƒ (Latin small f with hook)
+//   0x65: β (Greek beta) - could also be ß (German eszett), visually similar
+//   0xDC: h (plain h) - could also be ℎ (mathematical italic h)
 static const char* acwwCharTable[256] = {
-    "\0", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",        // 0x00-0x0F
-    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e",         // 0x10-0x1F
-    "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",         // 0x20-0x2F
-    "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "f",         // 0x30-0x3F
-    "s", "O", "Z", "s", "o", "z", "Y", "A", "A", "A", "A", "A", "A", "A", "C", "E",         // 0x40-0x4F (accented)
-    "E", "E", "E", "I", "I", "I", "I", "D", "N", "O", "O", "O", "O", "O", "O", "U",         // 0x50-0x5F
-    "U", "U", "U", "Y", "T", "s", "a", "a", "a", "a", "a", "a", "a", "c", "e", "e",         // 0x60-0x6F
-    "e", "e", "i", "i", "i", "i", "d", "n", "o", "o", "o", "o", "o", "o", "u", "u",         // 0x70-0x7F
-    "u", "u", "y", "t", "y", " ", "\n", "!", "\"", "#", "$", "%", "&", "'", "(", ")",       // 0x80-0x8F
-    "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "{", "]",         // 0x90-0x9F
-    "|", "_", "}", ",", ".", ".", "~", "L", "+", "+", "^", "%", "<", "`", "\"", "*",        // 0xA0-0xAF
-    "-", "'", "-", "\"", "T", ">", " ", "~", "Y", "|", "S", "!", "c", "L", " ", "c",        // 0xB0-0xBF
-    "a", "<", "-", "-", "R", "o", "+", "2", "3", "-", "s", "P", ">", "1", "o",              // 0xC0-0xCE
-    ">", ".", "1", "1", "3", " ", " ", " ", " ", "?", "x", "/", " ", "*", " ", " ",         // 0xCF-0xDF (special chars)
-    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",         // 0xE0-0xEF
-    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " "          // 0xF0-0xFF
+    // 0x00-0x0F: Null + A-O
+    "\0", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    // 0x10-0x1F: P-Z + a-e
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e",
+    // 0x20-0x2F: f-u
+    "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",
+    // 0x30-0x3F: v-z, 0-9, script f
+    "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "⨍",
+    // 0x40-0x4F: Extended Latin (Œ, Ž, etc.) and accented capitals
+    "ⓢ", "Œ", "Ž", "š", "œ", "ž", "Ÿ", "À", "Á", "Â", "Ã", "Ä", "Å", "Æ", "Ç", "È",
+    // 0x50-0x5F: More accented capitals
+    "É", "Ê", "Ë", "Ì", "Í", "Î", "Ï", "Đ", "Ñ", "Ò", "Ó", "Ô", "Õ", "Ö", "Ø", "Ù",
+    // 0x60-0x6F: Accented capitals continued + Greek beta + lowercase accented
+    "Ú", "Û", "Ü", "Ý", "Þ", "β", "à", "á", "â", "ã", "ä", "å", "æ", "ç", "è", "é",
+    // 0x70-0x7F: Lowercase accented continued
+    "ê", "ë", "ì", "í", "î", "ï", "ð", "ñ", "ò", "ó", "ô", "õ", "ö", "ø", "ù", "ú",
+    // 0x80-0x8F: More lowercase accented + space, newline, punctuation
+    "û", "ü", "ý", "þ", "ÿ", " ", "\n", "!", "\"", "#", "$", "%", "&", "´", "(", ")",
+    // 0x90-0x9F: Punctuation continued
+    "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "\\", "]",
+    // 0xA0-0xAF: More punctuation and special chars
+    "^", "_", "´", "{", "|", "}", "~", "€", ",", "„", "…", "†", "‡", "＾", "‰", "‹",
+    // 0xB0-0xBF: Quotes, bullets, dashes, special
+    "'", "'", """, """, "•", "–", "—", "˜", "™", "›", " ", "¡", "¢", "£", "¤", "¥",
+    // 0xC0-0xCF: Currency, legal, fractions
+    "¦", "§", "¨", "©", "ª", "«", "¬", "-", "®", "¯", "°", "±", "²", "³", "´", "µ",
+    // 0xD0-0xDF: More special chars, h, star, heart, music note
+    "¶", "·", "¸", "¹", "º", "»", "¼", "½", "¾", "¿", "×", "÷", "h", "★", "❤", "♪",
+    // 0xE0-0xEF: Unused/reserved
+    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",
+    // 0xF0-0xFF: Unused/reserved
+    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " "
 };
 
 // Decode ACWW bytes to QString
@@ -104,7 +124,7 @@ bool Letter::isEmpty() const {
 }
 
 QString Letter::getGreetingWithName() const {
-    if (namePosition > 0 && namePosition <= greeting.length() && !toPlayerName.isEmpty()) {
+    if (namePosition >= 0 && namePosition <= greeting.length() && !toPlayerName.isEmpty()) {
         return greeting.left(namePosition) + toPlayerName + greeting.mid(namePosition);
     }
     return greeting;
@@ -165,7 +185,6 @@ QByteArray Letter::toBytes() const {
     data[LetterFormat::NAME_POS_OFFSET] = static_cast<char>(namePosition);
     data[LetterFormat::STATIONERY_OFFSET] = static_cast<char>(stationeryType & 0x3F);
     data[LetterFormat::STATUS_OFFSET] = static_cast<char>(status);
-    data[LetterFormat::ORIGIN_OFFSET] = static_cast<char>(originType);
     writeU16LE(data, LetterFormat::ITEM_OFFSET, attachedItem);
 
     return data;
@@ -206,7 +225,6 @@ Letter Letter::fromBytes(const QByteArray& data) {
     letter.namePosition = static_cast<uint8_t>(data[LetterFormat::NAME_POS_OFFSET]);
     letter.stationeryType = static_cast<uint8_t>(data[LetterFormat::STATIONERY_OFFSET]) & 0x3F;
     letter.status = static_cast<uint8_t>(data[LetterFormat::STATUS_OFFSET]);
-    letter.originType = static_cast<uint8_t>(data[LetterFormat::ORIGIN_OFFSET]);
     letter.attachedItem = readU16LE(data, LetterFormat::ITEM_OFFSET);
 
     return letter;

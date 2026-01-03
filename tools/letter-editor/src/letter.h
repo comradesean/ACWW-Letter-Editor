@@ -4,41 +4,42 @@
 #include <cstdint>
 
 // Letter structure constants (244 bytes total)
+// First 4 bytes are a header (zeros), actual data starts at +0x04
 namespace LetterFormat {
     constexpr int SIZE = 0xF4;  // 244 bytes
 
-    // To field (recipient) - 0x00-0x13 (20 bytes)
-    constexpr int TO_TOWN_ID_OFFSET = 0x00;      // 2 bytes (uint16)
-    constexpr int TO_TOWN_OFFSET = 0x02;         // 8 bytes (town name)
-    constexpr int TO_PLAYER_ID_OFFSET = 0x0A;    // 2 bytes (uint16)
-    constexpr int TO_NAME_OFFSET = 0x0C;         // 8 bytes (player name)
+    // To field (recipient)
+    constexpr int TO_TOWN_ID_OFFSET = 0x04;      // 2 bytes (uint16)
+    constexpr int TO_TOWN_OFFSET = 0x06;         // 8 bytes (town name)
+    constexpr int TO_PLAYER_ID_OFFSET = 0x0E;    // 2 bytes (uint16)
+    constexpr int TO_NAME_OFFSET = 0x10;         // 8 bytes (player name)
 
-    // Receiver flags - 0x14-0x17 (4 bytes)
-    constexpr int RECEIVER_FLAGS_OFFSET = 0x14;
+    // Receiver flags
+    constexpr int RECEIVER_FLAGS_OFFSET = 0x18;
 
-    // From field (sender) - 0x18-0x2B (20 bytes)
-    constexpr int FROM_TOWN_ID_OFFSET = 0x18;    // 2 bytes (uint16)
-    constexpr int FROM_TOWN_OFFSET = 0x1A;       // 8 bytes (town name)
-    constexpr int FROM_PLAYER_ID_OFFSET = 0x22;  // 2 bytes (uint16)
-    constexpr int FROM_NAME_OFFSET = 0x24;       // 8 bytes (player name)
+    // From field (sender)
+    constexpr int FROM_TOWN_ID_OFFSET = 0x1C;    // 2 bytes (uint16)
+    constexpr int FROM_TOWN_OFFSET = 0x1E;       // 8 bytes (town name)
+    constexpr int FROM_PLAYER_ID_OFFSET = 0x26;  // 2 bytes (uint16)
+    constexpr int FROM_NAME_OFFSET = 0x28;       // 8 bytes (player name)
 
-    // Sender flags - 0x2C-0x2F (4 bytes)
-    constexpr int SENDER_FLAGS_OFFSET = 0x2C;
+    // Sender flags
+    constexpr int SENDER_FLAGS_OFFSET = 0x30;
 
     // Letter content
-    constexpr int GREETING_OFFSET = 0x30;        // 16 bytes
-    constexpr int GREETING_SIZE = 0x10;
-    constexpr int BODY_OFFSET = 0x48;            // 100 bytes
-    constexpr int BODY_SIZE = 0x64;
-    constexpr int SIGNATURE_OFFSET = 0xC8;       // 26 bytes
-    constexpr int SIGNATURE_SIZE = 0x1A;
+    constexpr int GREETING_OFFSET = 0x34;        // 24 bytes
+    constexpr int GREETING_SIZE = 0x18;
+    constexpr int BODY_OFFSET = 0x4C;            // 128 bytes
+    constexpr int BODY_SIZE = 0x80;
+    constexpr int SIGNATURE_OFFSET = 0xCC;       // 32 bytes
+    constexpr int SIGNATURE_SIZE = 0x20;
 
     // Metadata
-    constexpr int NAME_POS_OFFSET = 0xE8;        // 1 byte - position to insert name in greeting
-    constexpr int STATIONERY_OFFSET = 0xE9;      // 1 byte (0-63)
-    constexpr int STATUS_OFFSET = 0xEA;          // 1 byte (read/unread status)
-    constexpr int ORIGIN_OFFSET = 0xEB;          // 1 byte (letter origin type)
-    constexpr int ITEM_OFFSET = 0xEC;            // 2 bytes (attached item, little-endian)
+    constexpr int NAME_POS_OFFSET = 0xEC;        // 1 byte - intro index
+    constexpr int STATIONERY_OFFSET = 0xED;      // 1 byte (0-63) - paper ID
+    constexpr int STATUS_OFFSET = 0xEE;          // 1 byte (flags)
+    constexpr int ORIGIN_OFFSET = 0xEF;          // 1 byte (letter origin type)
+    constexpr int ITEM_OFFSET = 0xF0;            // 2 bytes (attached item, little-endian)
 
     // Name/town sizes
     constexpr int NAME_SIZE = 8;

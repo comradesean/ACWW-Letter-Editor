@@ -3,23 +3,44 @@
 #include <QDebug>
 #include <QVariantMap>
 
-// ACWW Western character encoding table for player names
+// ACWW Western character encoding table (256 entries)
+// Maps byte values 0x00-0xFF to Unicode characters
+// Note: Some characters have alternate interpretations:
+//   0x3F: ⨍ (script f) - could also be ƒ (Latin small f with hook)
+//   0x65: β (Greek beta) - could also be ß (German eszett), visually similar
+//   0xDC: h (plain h) - could also be ℎ (mathematical italic h)
 static const char* acwwCharTable[256] = {
+    // 0x00-0x0F: Null + A-O
     "\0", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    // 0x10-0x1F: P-Z + a-e
     "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e",
+    // 0x20-0x2F: f-u
     "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",
-    "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "f",
-    "s", "O", "Z", "s", "o", "z", "Y", "A", "A", "A", "A", "A", "A", "A", "C", "E",
-    "E", "E", "E", "I", "I", "I", "I", "D", "N", "O", "O", "O", "O", "O", "O", "U",
-    "U", "U", "U", "Y", "T", "s", "a", "a", "a", "a", "a", "a", "a", "c", "e", "e",
-    "e", "e", "i", "i", "i", "i", "d", "n", "o", "o", "o", "o", "o", "o", "u", "u",
-    "u", "u", "y", "t", "y", " ", "\n", "!", "\"", "#", "$", "%", "&", "'", "(", ")",
-    "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "{", "]",
-    "|", "_", "}", ",", ".", ".", "~", "L", "+", "+", "^", "%", "<", "`", "\"", "*",
-    "-", "'", "-", "\"", "T", ">", " ", "~", "Y", "|", "S", "!", "c", "L", " ", "c",
-    "a", "<", "-", "-", "R", "o", "+", "2", "3", "-", "s", "P", ">", "1", "o",
-    ">", ".", "1", "1", "3", " ", " ", " ", " ", "?", "x", "/", " ", "*", " ", " ",
+    // 0x30-0x3F: v-z, 0-9, script f
+    "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "⨍",
+    // 0x40-0x4F: Extended Latin (Œ, Ž, etc.) and accented capitals
+    "ⓢ", "Œ", "Ž", "š", "œ", "ž", "Ÿ", "À", "Á", "Â", "Ã", "Ä", "Å", "Æ", "Ç", "È",
+    // 0x50-0x5F: More accented capitals
+    "É", "Ê", "Ë", "Ì", "Í", "Î", "Ï", "Đ", "Ñ", "Ò", "Ó", "Ô", "Õ", "Ö", "Ø", "Ù",
+    // 0x60-0x6F: Accented capitals continued + Greek beta + lowercase accented
+    "Ú", "Û", "Ü", "Ý", "Þ", "β", "à", "á", "â", "ã", "ä", "å", "æ", "ç", "è", "é",
+    // 0x70-0x7F: Lowercase accented continued
+    "ê", "ë", "ì", "í", "î", "ï", "ð", "ñ", "ò", "ó", "ô", "õ", "ö", "ø", "ù", "ú",
+    // 0x80-0x8F: More lowercase accented + space, newline, punctuation
+    "û", "ü", "ý", "þ", "ÿ", " ", "\n", "!", "\"", "#", "$", "%", "&", "´", "(", ")",
+    // 0x90-0x9F: Punctuation continued
+    "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "\\", "]",
+    // 0xA0-0xAF: More punctuation and special chars
+    "^", "_", "´", "{", "|", "}", "~", "€", ",", "„", "…", "†", "‡", "＾", "‰", "‹",
+    // 0xB0-0xBF: Quotes, bullets, dashes, special
+    "'", "'", """, """, "•", "–", "—", "˜", "™", "›", " ", "¡", "¢", "£", "¤", "¥",
+    // 0xC0-0xCF: Currency, legal, fractions
+    "¦", "§", "¨", "©", "ª", "«", "¬", "-", "®", "¯", "°", "±", "²", "³", "´", "µ",
+    // 0xD0-0xDF: More special chars, h, star, heart, music note
+    "¶", "·", "¸", "¹", "º", "»", "¼", "½", "¾", "¿", "×", "÷", "h", "★", "❤", "♪",
+    // 0xE0-0xEF: Unused/reserved
     " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",
+    // 0xF0-0xFF: Unused/reserved
     " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " "
 };
 
@@ -33,57 +54,57 @@ static QString decodeAcwwText(const QByteArray& data) {
     return result.trimmed();
 }
 
-// Letter slot offsets for EUR/USA region
+// Letter slot offsets for EUR/USA region (includes 4-byte header at start of each letter)
 // Inventory slots (10 per player)
 static const uint32_t INVENTORY_OFFSETS[4][10] = {
     // Player 1
-    {0x1158, 0x124C, 0x1340, 0x1434, 0x1528, 0x161C, 0x1710, 0x1804, 0x18F8, 0x19EC},
+    {0x1154, 0x1248, 0x133C, 0x1430, 0x1524, 0x1618, 0x170C, 0x1800, 0x18F4, 0x19E8},
     // Player 2
-    {0x33E4, 0x34D8, 0x35CC, 0x36C0, 0x37B4, 0x38A8, 0x399C, 0x3A90, 0x3B84, 0x3C78},
+    {0x33E0, 0x34D4, 0x35C8, 0x36BC, 0x37B0, 0x38A4, 0x3998, 0x3A8C, 0x3B80, 0x3C74},
     // Player 3
-    {0x5670, 0x5764, 0x5858, 0x594C, 0x5A40, 0x5B34, 0x5C28, 0x5D1C, 0x5E10, 0x5F04},
+    {0x566C, 0x5760, 0x5854, 0x5948, 0x5A3C, 0x5B30, 0x5C24, 0x5D18, 0x5E0C, 0x5F00},
     // Player 4
-    {0x78FC, 0x79F0, 0x7AE4, 0x7BD8, 0x7CCC, 0x7DC0, 0x7EB4, 0x7FA8, 0x809C, 0x8190}
+    {0x78F8, 0x79EC, 0x7AE0, 0x7BD4, 0x7CC8, 0x7DBC, 0x7EB0, 0x7FA4, 0x8098, 0x818C}
 };
 
 // Inventory backup offsets
 static const uint32_t INVENTORY_BACKUP_OFFSETS[4][10] = {
     // Player 1
-    {0x17138, 0x1722C, 0x17320, 0x17414, 0x17508, 0x175FC, 0x176F0, 0x177E4, 0x178D8, 0x179CC},
+    {0x17134, 0x17228, 0x1731C, 0x17410, 0x17504, 0x175F8, 0x176EC, 0x177E0, 0x178D4, 0x179C8},
     // Player 2
-    {0x193C4, 0x194B8, 0x195AC, 0x196A0, 0x19794, 0x19888, 0x1997C, 0x19A70, 0x19B64, 0x19C58},
+    {0x193C0, 0x194B4, 0x195A8, 0x1969C, 0x19790, 0x19884, 0x19978, 0x19A6C, 0x19B60, 0x19C54},
     // Player 3
-    {0x1B650, 0x1B744, 0x1B838, 0x1B92C, 0x1BA20, 0x1BB14, 0x1BC08, 0x1BCFC, 0x1BDF0, 0x1BEE4},
+    {0x1B64C, 0x1B740, 0x1B834, 0x1B928, 0x1BA1C, 0x1BB10, 0x1BC04, 0x1BCF8, 0x1BDEC, 0x1BEE0},
     // Player 4
-    {0x1D8DC, 0x1D9D0, 0x1DAC4, 0x1DBB8, 0x1DCAC, 0x1DDA0, 0x1DE94, 0x1DF88, 0x1E07C, 0x1E170}
+    {0x1D8D8, 0x1D9CC, 0x1DAC0, 0x1DBB4, 0x1DCA8, 0x1DD9C, 0x1DE90, 0x1DF84, 0x1E078, 0x1E16C}
 };
 
 // Mailbox slots (10 per player)
 static const uint32_t MAILBOX_OFFSETS[4][10] = {
     // Player 1
-    {0x12010, 0x12104, 0x121F8, 0x122EC, 0x123E0, 0x124D4, 0x125C8, 0x126BC, 0x127B0, 0x128A4},
+    {0x1200C, 0x12100, 0x121F4, 0x122E8, 0x123DC, 0x124D0, 0x125C4, 0x126B8, 0x127AC, 0x128A0},
     // Player 2
-    {0x1299C, 0x12A90, 0x12B84, 0x12C78, 0x12D6C, 0x12E60, 0x12F54, 0x13048, 0x1313C, 0x13230},
+    {0x12998, 0x12A8C, 0x12B80, 0x12C74, 0x12D68, 0x12E5C, 0x12F50, 0x13044, 0x13138, 0x1322C},
     // Player 3
-    {0x13328, 0x1341C, 0x13510, 0x13604, 0x136F8, 0x137EC, 0x138E0, 0x139D4, 0x13AC8, 0x13BBC},
+    {0x13324, 0x13418, 0x1350C, 0x13600, 0x136F4, 0x137E8, 0x138DC, 0x139D0, 0x13AC4, 0x13BB8},
     // Player 4
-    {0x13CB4, 0x13DA8, 0x13E9C, 0x13F90, 0x14084, 0x14178, 0x1426C, 0x14360, 0x14454, 0x14548}
+    {0x13CB0, 0x13DA4, 0x13E98, 0x13F8C, 0x14080, 0x14174, 0x14268, 0x1435C, 0x14450, 0x14544}
 };
 
 // Mailbox backup offsets
 static const uint32_t MAILBOX_BACKUP_OFFSETS[4][10] = {
     // Player 1
-    {0x27FF0, 0x280E4, 0x281D8, 0x282CC, 0x283C0, 0x284B4, 0x285A8, 0x2869C, 0x28790, 0x28884},
+    {0x27FEC, 0x280E0, 0x281D4, 0x282C8, 0x283BC, 0x284B0, 0x285A4, 0x28698, 0x2878C, 0x28880},
     // Player 2
-    {0x2897C, 0x28A70, 0x28B64, 0x28C58, 0x28D4C, 0x28E40, 0x28F34, 0x29028, 0x2911C, 0x29210},
+    {0x28978, 0x28A6C, 0x28B60, 0x28C54, 0x28D48, 0x28E3C, 0x28F30, 0x29024, 0x29118, 0x2920C},
     // Player 3
-    {0x29308, 0x293FC, 0x294F0, 0x295E4, 0x296D8, 0x297CC, 0x298C0, 0x299B4, 0x29AA8, 0x29B9C},
+    {0x29304, 0x293F8, 0x294EC, 0x295E0, 0x296D4, 0x297C8, 0x298BC, 0x299B0, 0x29AA4, 0x29B98},
     // Player 4
-    {0x29C94, 0x29D88, 0x29E7C, 0x29F70, 0x2A064, 0x2A158, 0x2A24C, 0x2A340, 0x2A434, 0x2A528}
+    {0x29C90, 0x29D84, 0x29E78, 0x29F6C, 0x2A060, 0x2A154, 0x2A248, 0x2A33C, 0x2A430, 0x2A524}
 };
 
 // Bank storage slots (75 per player) - Player 1 only shown, others calculated
-static const uint32_t BANK_PLAYER1_START = 0x2E210;
+static const uint32_t BANK_PLAYER1_START = 0x2E20C;
 static const uint32_t BANK_PLAYER_STRIDE = 0x4778;  // Offset between players
 
 // Player data structure offsets (EUR/USA)
@@ -242,6 +263,17 @@ bool SaveFile::save(const QString& path) {
     return true;
 }
 
+void SaveFile::close() {
+    m_data.clear();
+    m_filePath.clear();
+    m_region = Region::Unknown;
+    m_loaded = false;
+    m_modified = false;
+
+    emit loadedChanged();
+    emit modifiedChanged();
+}
+
 QString SaveFile::regionName() const {
     switch (m_region) {
         case Region::EUR_USA: return "EUR/USA";
@@ -266,8 +298,17 @@ QString SaveFile::getPlayerName(int player) const {
 }
 
 bool SaveFile::playerExists(int player) const {
+    if (!m_loaded || player < 0 || player >= PLAYER_COUNT) {
+        return false;
+    }
+
+    // Check if player has a non-empty name OR a valid player ID
+    // Player ID of 0 typically means the slot is unused
     QString name = getPlayerName(player);
-    return !name.isEmpty();
+    int playerId = getPlayerId(player);
+
+    // A player exists if they have a name or a non-zero player ID
+    return !name.isEmpty() || playerId != 0;
 }
 
 QStringList SaveFile::getPlayerNames() const {
@@ -395,15 +436,37 @@ QVariantList SaveFile::getSlotSummaries(int player, int storageType) const {
     for (int i = 0; i < slotCount; i++) {
         Letter letter = getLetter(player, storageType, i);
         QVariantMap summary;
-        summary["isEmpty"] = letter.isEmpty();
+        bool empty = letter.isEmpty();
+        // 0xFFF1 means "no item" in ACWW
+        bool hasItem = letter.attachedItem != 0 && letter.attachedItem != 0xFFF1;
+        summary["isEmpty"] = empty;
         summary["recipientName"] = letter.toPlayerName;
         summary["senderName"] = letter.fromPlayerName;
-        summary["hasAttachment"] = letter.attachedItem != 0;
+        summary["hasAttachment"] = !empty && hasItem;
         summary["stationery"] = letter.stationeryType;
         summaries.append(summary);
     }
 
     return summaries;
+}
+
+QByteArray SaveFile::getRawLetterBytes(int player, int storageType, int slot) const {
+    if (!m_loaded || player < 0 || player >= PLAYER_COUNT) {
+        return QByteArray();
+    }
+
+    StorageType type = static_cast<StorageType>(storageType);
+    int maxSlots = getSlotCount(storageType);
+    if (slot < 0 || slot >= maxSlots) {
+        return QByteArray();
+    }
+
+    uint32_t offset = getLetterOffset(player, type, slot);
+    if (offset + LetterFormat::SIZE > static_cast<uint32_t>(m_data.size())) {
+        return QByteArray();
+    }
+
+    return m_data.mid(offset, LetterFormat::SIZE);
 }
 
 bool SaveFile::validateChecksum() const {

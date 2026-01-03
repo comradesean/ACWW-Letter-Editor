@@ -2,5 +2,8 @@
     <qresource prefix="/">
         <file>qml/main.qml</file>
         <file>qml/SaveBrowser.qml</file>
+        <file>qml/components/SlotDelegate.qml</file>
+        <file>qml/components/StatusBar.qml</file>
+        <file>qml/dialogs/UnsavedChangesDialog.qml</file>
     </qresource>
 </RCC>
