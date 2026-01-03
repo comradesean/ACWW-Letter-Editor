@@ -233,10 +233,22 @@ QVector<QPair<QString, int>> LetterCanvasItem::wrapBodyText() const {
 
 void LetterCanvasItem::insertChar(const QString& ch) {
     if (!m_backend || !m_backend->isLoaded()) return;
-    if (ch.isEmpty() || !ch[0].isPrint()) return;
+    if (ch.isEmpty()) return;
+
+    // Check if this is a surrogate pair (emoji) and convert to PUA character
+    QString insertText = ch;
+    bool isSurrogatePair = ch.length() >= 2 && ch[0].isHighSurrogate() && ch[1].isLowSurrogate();
+    if (isSurrogatePair) {
+        uint32_t codePoint = QChar::surrogateToUcs4(ch[0], ch[1]);
+        if (codePoint == 0x1F4A7) {  // 💧 Water droplet
+            insertText = QChar(0xE000);  // Convert to PUA character
+        }
+    }
+
+    if (!isSurrogatePair && !ch[0].isPrint()) return;
 
     // Allow printable ASCII and special characters supported by the ACWW font
-    bool isValidChar = ch[0].unicode() < 128 || m_backend->font().hasGlyph(ch[0]);
+    bool isValidChar = (insertText[0].unicode() < 128) || m_backend->font().hasGlyph(insertText[0]);
     if (isValidChar) {
 
         // If there's a selection, delete it first
@@ -271,7 +283,7 @@ void LetterCanvasItem::insertChar(const QString& ch) {
             }
 
             // Check if adding the new character would exceed the limit
-            int newCharWidth = font.charWidth(ch[0]) + GLYPH_SPACING;
+            int newCharWidth = font.charWidth(insertText[0]) + GLYPH_SPACING;
             if (templateWidth + newCharWidth > maxTemplateWidth) return;
 
             // Protect recipient name
@@ -281,7 +293,7 @@ void LetterCanvasItem::insertChar(const QString& ch) {
             }
 
             int insertPos = m_cursorPosInSection;
-            m_header.insert(m_cursorPosInSection, ch);
+            m_header.insert(m_cursorPosInSection, insertText);
             m_cursorPosInSection++;
 
             // Shift recipient name position if inserted before it
@@ -305,7 +317,7 @@ void LetterCanvasItem::insertChar(const QString& ch) {
 
             // Check width for lines with explicit newlines
             QString currentLine = m_body.mid(lineStart, lineEnd - lineStart);
-            currentLine.insert(m_cursorPosInSection - lineStart, ch);
+            currentLine.insert(m_cursorPosInSection - lineStart, insertText);
 
             const FontLoader& font = m_backend->font();
             int lineWidth = 0;
@@ -318,7 +330,7 @@ void LetterCanvasItem::insertChar(const QString& ch) {
                 return;
             }
 
-            m_body.insert(m_cursorPosInSection, ch);
+            m_body.insert(m_cursorPosInSection, insertText);
             m_cursorPosInSection++;
 
             // Check visual line overflow
@@ -337,7 +349,7 @@ void LetterCanvasItem::insertChar(const QString& ch) {
             if (m_footer.length() >= MAX_FOOTER_CHARS) return;
 
             QString testFooter = m_footer;
-            testFooter.insert(m_cursorPosInSection, ch);
+            testFooter.insert(m_cursorPosInSection, insertText);
             int testWidth = 0;
             const FontLoader& font = m_backend->font();
             for (const QChar& c : testFooter) {
@@ -345,7 +357,7 @@ void LetterCanvasItem::insertChar(const QString& ch) {
             }
             if (testWidth > LetterConstants::MAX_FOOTER_WIDTH) return;
 
-            m_footer.insert(m_cursorPosInSection, ch);
+            m_footer.insert(m_cursorPosInSection, insertText);
             m_cursorPosInSection++;
         }
 
@@ -1356,13 +1368,24 @@ void LetterCanvasItem::paste() {
 
     int startSection = m_currentSection;
 
-    for (const QChar& ch : clipboardText) {
+    // Iterate by code points to handle surrogate pairs (emoji)
+    int i = 0;
+    while (i < clipboardText.length()) {
         // Stop if section changed
         if (m_currentSection != startSection) {
             break;
         }
 
-        if (ch == '\n') {
+        QChar ch = clipboardText[i];
+
+        // Check for surrogate pair (emoji)
+        if (ch.isHighSurrogate() && i + 1 < clipboardText.length() &&
+            QChar(clipboardText[i + 1]).isLowSurrogate()) {
+            // Pass both characters as a QString to insertChar
+            QString codePoint = clipboardText.mid(i, 2);
+            insertChar(codePoint);
+            i += 2;
+        } else if (ch == '\n') {
             // Only allow newlines in body
             if (startSection == 1) {
                 if (countLogicalBodyLines() >= BODY_LINES) {
@@ -1370,9 +1393,13 @@ void LetterCanvasItem::paste() {
                 }
                 newLine();
             }
+            i++;
         } else if (ch.isPrint()) {
             // insertChar handles validation including special character support
             insertChar(QString(ch));
+            i++;
+        } else {
+            i++;
         }
     }
 }
