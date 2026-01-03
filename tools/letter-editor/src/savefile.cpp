@@ -3,23 +3,44 @@
 #include <QDebug>
 #include <QVariantMap>
 
-// ACWW Western character encoding table for player names
+// ACWW Western character encoding table (256 entries)
+// Maps byte values 0x00-0xFF to Unicode characters
+// Note: Some characters have alternate interpretations:
+//   0x3F: ⨍ (script f) - could also be ƒ (Latin small f with hook)
+//   0x65: β (Greek beta) - could also be ß (German eszett), visually similar
+//   0xDC: h (plain h) - could also be ℎ (mathematical italic h)
 static const char* acwwCharTable[256] = {
+    // 0x00-0x0F: Null + A-O
     "\0", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    // 0x10-0x1F: P-Z + a-e
     "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e",
+    // 0x20-0x2F: f-u
     "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",
-    "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "f",
-    "s", "O", "Z", "s", "o", "z", "Y", "A", "A", "A", "A", "A", "A", "A", "C", "E",
-    "E", "E", "E", "I", "I", "I", "I", "D", "N", "O", "O", "O", "O", "O", "O", "U",
-    "U", "U", "U", "Y", "T", "s", "a", "a", "a", "a", "a", "a", "a", "c", "e", "e",
-    "e", "e", "i", "i", "i", "i", "d", "n", "o", "o", "o", "o", "o", "o", "u", "u",
-    "u", "u", "y", "t", "y", " ", "\n", "!", "\"", "#", "$", "%", "&", "'", "(", ")",
-    "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "{", "]",
-    "|", "_", "}", ",", ".", ".", "~", "L", "+", "+", "^", "%", "<", "`", "\"", "*",
-    "-", "'", "-", "\"", "T", ">", " ", "~", "Y", "|", "S", "!", "c", "L", " ", "c",
-    "a", "<", "-", "-", "R", "o", "+", "2", "3", "-", "s", "P", ">", "1", "o",
-    ">", ".", "1", "1", "3", " ", " ", " ", " ", "?", "x", "/", " ", "*", " ", " ",
+    // 0x30-0x3F: v-z, 0-9, script f
+    "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "⨍",
+    // 0x40-0x4F: Extended Latin (Œ, Ž, etc.) and accented capitals
+    "ⓢ", "Œ", "Ž", "š", "œ", "ž", "Ÿ", "À", "Á", "Â", "Ã", "Ä", "Å", "Æ", "Ç", "È",
+    // 0x50-0x5F: More accented capitals
+    "É", "Ê", "Ë", "Ì", "Í", "Î", "Ï", "Đ", "Ñ", "Ò", "Ó", "Ô", "Õ", "Ö", "Ø", "Ù",
+    // 0x60-0x6F: Accented capitals continued + Greek beta + lowercase accented
+    "Ú", "Û", "Ü", "Ý", "Þ", "β", "à", "á", "â", "ã", "ä", "å", "æ", "ç", "è", "é",
+    // 0x70-0x7F: Lowercase accented continued
+    "ê", "ë", "ì", "í", "î", "ï", "ð", "ñ", "ò", "ó", "ô", "õ", "ö", "ø", "ù", "ú",
+    // 0x80-0x8F: More lowercase accented + space, newline, punctuation
+    "û", "ü", "ý", "þ", "ÿ", " ", "\n", "!", "\"", "#", "$", "%", "&", "´", "(", ")",
+    // 0x90-0x9F: Punctuation continued
+    "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "\\", "]",
+    // 0xA0-0xAF: More punctuation and special chars
+    "^", "_", "´", "{", "|", "}", "~", "€", ",", "„", "…", "†", "‡", "＾", "‰", "‹",
+    // 0xB0-0xBF: Quotes, bullets, dashes, special
+    "'", "'", """, """, "•", "–", "—", "˜", "™", "›", " ", "¡", "¢", "£", "¤", "¥",
+    // 0xC0-0xCF: Currency, legal, fractions
+    "¦", "§", "¨", "©", "ª", "«", "¬", "-", "®", "¯", "°", "±", "²", "³", "´", "µ",
+    // 0xD0-0xDF: More special chars, h, star, heart, music note
+    "¶", "·", "¸", "¹", "º", "»", "¼", "½", "¾", "¿", "×", "÷", "h", "★", "❤", "♪",
+    // 0xE0-0xEF: Unused/reserved
     " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",
+    // 0xF0-0xFF: Unused/reserved
     " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " "
 };
 
@@ -427,6 +448,25 @@ QVariantList SaveFile::getSlotSummaries(int player, int storageType) const {
     }
 
     return summaries;
+}
+
+QByteArray SaveFile::getRawLetterBytes(int player, int storageType, int slot) const {
+    if (!m_loaded || player < 0 || player >= PLAYER_COUNT) {
+        return QByteArray();
+    }
+
+    StorageType type = static_cast<StorageType>(storageType);
+    int maxSlots = getSlotCount(storageType);
+    if (slot < 0 || slot >= maxSlots) {
+        return QByteArray();
+    }
+
+    uint32_t offset = getLetterOffset(player, type, slot);
+    if (offset + LetterFormat::SIZE > static_cast<uint32_t>(m_data.size())) {
+        return QByteArray();
+    }
+
+    return m_data.mid(offset, LetterFormat::SIZE);
 }
 
 bool SaveFile::validateChecksum() const {

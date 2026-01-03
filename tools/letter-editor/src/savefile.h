@@ -64,6 +64,7 @@ public:
     // Letter access
     Q_INVOKABLE Letter getLetter(int player, int storageType, int slot) const;
     Q_INVOKABLE void setLetter(int player, int storageType, int slot, const Letter& letter);
+    Q_INVOKABLE QByteArray getRawLetterBytes(int player, int storageType, int slot) const;
 
     // Slot counts
     Q_INVOKABLE int getSlotCount(int storageType) const;

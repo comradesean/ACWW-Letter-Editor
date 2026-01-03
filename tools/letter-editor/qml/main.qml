@@ -34,28 +34,101 @@ ApplicationWindow {
     readonly property color textMuted: "#64748B"
     readonly property color divider: "#1E293B"
 
-    // Dirty state tracking for letter edits
+    // Dirty state tracking for letter modifications
+    // Note: Only tracks Letter Structure Data fields (stored in .ltr/save file)
+    // GUI/Display fields (recipientNameStart/End, letterHeader/Body/Footer parsing) are not tracked
     QtObject {
         id: dirtyState
         property bool letterModified: false
+
+        // ========================================
+        // Letter Structure Data (stored in .ltr/save file)
+        // ========================================
+        // Stationery
+        property int cleanPaper: 0
+
+        // Letter content (canvas text fields map to letterText in backend)
         property string cleanHeader: ""
         property string cleanBody: ""
         property string cleanFooter: ""
-        property int cleanPaper: 0
+
+        // Recipient info
+        property string cleanRecipientName: ""
+        property string cleanRecipientTown: ""
+        property int cleanRecipientTownId: 0
+        property int cleanRecipientPlayerId: 0
+
+        // Sender info
+        property string cleanSenderName: ""
+        property string cleanSenderTown: ""
+        property int cleanSenderTownId: 0
+        property int cleanSenderPlayerId: 0
+
+        // Attached item
+        property int cleanAttachedItem: 0xFFF1
+
+        // Letter metadata flags (not editable in UI yet)
+        property int cleanReceiverFlags: 0
+        property int cleanSenderFlags: 0
+        property int cleanNamePosition: 0
+        property int cleanLetterStatus: 0
+        property int cleanLetterOrigin: 0
 
         function capture() {
+            // Stationery
+            cleanPaper = backend.currentPaper
+            // Letter content
             cleanHeader = canvas.header
             cleanBody = canvas.body
             cleanFooter = canvas.footer
-            cleanPaper = backend.currentPaper
+            // Recipient info
+            cleanRecipientName = backend.recipientName
+            cleanRecipientTown = backend.recipientTown
+            cleanRecipientTownId = backend.recipientTownId
+            cleanRecipientPlayerId = backend.recipientPlayerId
+            // Sender info
+            cleanSenderName = backend.senderName
+            cleanSenderTown = backend.senderTown
+            cleanSenderTownId = backend.senderTownId
+            cleanSenderPlayerId = backend.senderPlayerId
+            // Attached item
+            cleanAttachedItem = backend.attachedItem
+            // Letter metadata flags
+            cleanReceiverFlags = backend.receiverFlags
+            cleanSenderFlags = backend.senderFlags
+            cleanNamePosition = backend.namePosition
+            cleanLetterStatus = backend.letterStatus
+            cleanLetterOrigin = backend.letterOrigin
+
             letterModified = false
         }
 
         function check() {
-            letterModified = (canvas.header !== cleanHeader) ||
-                           (canvas.body !== cleanBody) ||
-                           (canvas.footer !== cleanFooter) ||
-                           (backend.currentPaper !== cleanPaper)
+            letterModified =
+                // Stationery
+                (backend.currentPaper !== cleanPaper) ||
+                // Letter content
+                (canvas.header !== cleanHeader) ||
+                (canvas.body !== cleanBody) ||
+                (canvas.footer !== cleanFooter) ||
+                // Recipient info
+                (backend.recipientName !== cleanRecipientName) ||
+                (backend.recipientTown !== cleanRecipientTown) ||
+                (backend.recipientTownId !== cleanRecipientTownId) ||
+                (backend.recipientPlayerId !== cleanRecipientPlayerId) ||
+                // Sender info
+                (backend.senderName !== cleanSenderName) ||
+                (backend.senderTown !== cleanSenderTown) ||
+                (backend.senderTownId !== cleanSenderTownId) ||
+                (backend.senderPlayerId !== cleanSenderPlayerId) ||
+                // Attached item
+                (backend.attachedItem !== cleanAttachedItem) ||
+                // Letter metadata flags
+                (backend.receiverFlags !== cleanReceiverFlags) ||
+                (backend.senderFlags !== cleanSenderFlags) ||
+                (backend.namePosition !== cleanNamePosition) ||
+                (backend.letterStatus !== cleanLetterStatus) ||
+                (backend.letterOrigin !== cleanLetterOrigin)
         }
 
         function confirmDiscard(callback) {
@@ -358,7 +431,10 @@ ApplicationWindow {
                             ]},
                             { title: "Edit", items: [
                                 { text: "Edit Letter Info...", actionId: "editLetterInfo", enabledWhen: "loaded" },
+                                { text: "Edit Attached Item...", actionId: "editAttachedItem", enabledWhen: "loaded" },
                                 { text: "Import Addressee from Save", actionId: "importAddressee", enabledWhen: "saveLoaded" },
+                                { separator: true },
+                                { text: "View Hex...", actionId: "viewHex", enabledWhen: "loaded" },
                                 { separator: true },
                                 { text: "Clear Letter", shortcut: "Ctrl+N", actionId: "clearLetter" }
                             ]},
@@ -419,7 +495,7 @@ ApplicationWindow {
                                                                       (modelData.enabledWhen === "loaded" && !backend.loaded) ||
                                                                       (modelData.enabledWhen === "saveLoaded" && !backend.saveLoaded)
 
-                                            width: 160
+                                            width: 200
                                             height: isSeparator ? 9 : 32
                                             radius: isSeparator ? 0 : 6
                                             color: (!isSeparator && !isDisabled && itemMouseArea.containsMouse) ? bgHover : "transparent"
@@ -500,6 +576,7 @@ ApplicationWindow {
                                                         backend.senderTown = ""
                                                         backend.senderPlayerId = 0
                                                         backend.senderTownId = 0
+                                                        backend.attachedItem = 0xFFF1
                                                     } else if (actionId === "editLetterInfo") {
                                                         letterInfoDialog.selectedTab = 0
                                                         recipientTownIdField.text = backend.recipientTownId.toString()
@@ -511,6 +588,14 @@ ApplicationWindow {
                                                         senderPlayerIdField.text = backend.senderPlayerId.toString()
                                                         senderNameField.text = backend.senderName
                                                         letterInfoDialog.open()
+                                                    } else if (actionId === "editAttachedItem") {
+                                                        attachedItemDialogField.text = backend.attachedItem.toString(16).toUpperCase().padStart(4, '0')
+                                                        attachedItemDialog.open()
+                                                    } else if (actionId === "viewHex") {
+                                                        // Sync canvas text to backend before getting hex
+                                                        backend.letterText = canvas.text
+                                                        hexViewerDialog.hexContent = backend.getLetterHex()
+                                                        hexViewerDialog.open()
                                                     } else if (actionId === "importAddressee") {
                                                         backend.importAddresseeFromSave()
                                                         // Update canvas with new header
@@ -1331,6 +1416,7 @@ ApplicationWindow {
             backend.senderTown = ""
             backend.senderPlayerId = 0
             backend.senderTownId = 0
+            backend.attachedItem = 0xFFF1
         }
     }
 
@@ -1664,6 +1750,7 @@ ApplicationWindow {
                             }
                         }
                     }
+
                 }
             }
 
@@ -1755,7 +1842,426 @@ ApplicationWindow {
                                 backend.senderTown = senderTownField.text
                                 backend.senderPlayerId = parseInt(senderPlayerIdField.text) || 0
                                 backend.senderName = senderNameField.text
+
                                 letterInfoDialog.close()
+                                canvas.forceActiveFocus()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Edit Attached Item Dialog
+    Popup {
+        id: attachedItemDialog
+        modal: true
+        anchors.centerIn: parent
+        width: 380
+        height: 480
+        padding: 0
+
+        property var itemList: []
+        property var filteredItems: []
+        property string selectedCategory: "All"
+
+        function loadItems() {
+            loadCategory(selectedCategory)
+        }
+
+        function loadCategory(categoryName) {
+            selectedCategory = categoryName
+            itemList = backend.getItemsByCategory(categoryName)
+            filterItems(itemSearchField.text)
+        }
+
+        function filterItems(searchText) {
+            if (searchText === "") {
+                filteredItems = itemList
+            } else {
+                var search = searchText.toLowerCase()
+                filteredItems = itemList.filter(function(item) {
+                    return item.display.toLowerCase().indexOf(search) !== -1
+                })
+            }
+        }
+
+        function selectItem(hexCode) {
+            attachedItemDialogField.text = hexCode.toString(16).toUpperCase().padStart(4, '0')
+        }
+
+        function scrollToSelectedItem() {
+            var currentHex = backend.attachedItem
+            for (var i = 0; i < filteredItems.length; i++) {
+                if (filteredItems[i].hex === currentHex) {
+                    itemListView.positionViewAtIndex(i, ListView.Beginning)
+                    break
+                }
+            }
+        }
+
+        onOpened: {
+            selectedCategory = "All"
+            categoryCombo.currentIndex = 0
+            loadItems()
+            // Delay scroll to ensure list is populated
+            Qt.callLater(scrollToSelectedItem)
+        }
+
+        background: Rectangle {
+            color: bgElevated
+            radius: 8
+            border.color: divider
+            border.width: 1
+        }
+
+        contentItem: Column {
+            spacing: 0
+
+            // Header
+            Rectangle {
+                width: parent.width
+                height: 36
+                color: bgSurface
+                radius: 8
+
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 8
+                    color: bgSurface
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Edit Attached Item"
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                    color: textPrimary
+                }
+
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: divider
+                }
+            }
+
+            // Form content
+            Item {
+                width: parent.width
+                height: attachedItemDialog.height - 36 - 40  // Header and footer
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 8
+
+                    // Hex input row
+                    Row {
+                        width: parent.width
+                        spacing: 8
+
+                        Column {
+                            width: 80
+                            spacing: 3
+                            Text { text: "Item ID (hex)"; font.pixelSize: 10; color: textMuted }
+                            TextField {
+                                id: attachedItemDialogField
+                                width: parent.width; height: 28
+                                text: backend.attachedItem.toString(16).toUpperCase().padStart(4, '0')
+                                font.pixelSize: 11; color: textPrimary; font.family: "Consolas, monospace"
+                                leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                                maximumLength: 4
+                                validator: RegularExpressionValidator { regularExpression: /[0-9A-Fa-f]{0,4}/ }
+                                background: Rectangle {
+                                    color: bgHover; radius: 4
+                                    border.color: attachedItemDialogField.activeFocus ? accentPrimary : divider
+                                    border.width: 1
+                                }
+                            }
+                        }
+
+                        Column {
+                            width: parent.width - 88
+                            spacing: 3
+                            Text { text: "Item Name"; font.pixelSize: 10; color: textMuted }
+                            Rectangle {
+                                width: parent.width; height: 28
+                                color: bgHover; radius: 4
+                                border.color: divider; border.width: 1
+
+                                Text {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    verticalAlignment: Text.AlignVCenter
+                                    text: {
+                                        var hex = parseInt(attachedItemDialogField.text, 16)
+                                        if (isNaN(hex)) return ""
+                                        return backend.getItemName(hex)
+                                    }
+                                    font.pixelSize: 11
+                                    color: textPrimary
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+                    }
+
+                    // Category and Search row
+                    Row {
+                        width: parent.width
+                        spacing: 8
+
+                        Column {
+                            width: (parent.width - 8) / 2
+                            spacing: 3
+                            Text { text: "Category"; font.pixelSize: 10; color: textMuted }
+                            Rectangle {
+                                width: parent.width
+                                height: 28
+                                color: bgHover
+                                radius: 4
+                                border.color: categoryCombo.down ? accentPrimary : divider
+                                border.width: 1
+
+                                ComboBox {
+                                    id: categoryCombo
+                                    anchors.fill: parent
+                                    model: backend.getItemCategories()
+                                    font.pixelSize: 11
+
+                                    onCurrentTextChanged: {
+                                        if (attachedItemDialog.visible) {
+                                            attachedItemDialog.loadCategory(currentText)
+                                        }
+                                    }
+
+                                    delegate: ItemDelegate {
+                                        width: categoryCombo.width
+                                        height: 26
+
+                                        contentItem: Text {
+                                            text: modelData
+                                            color: highlighted ? textPrimary : textSecondary
+                                            font.pixelSize: 11
+                                            verticalAlignment: Text.AlignVCenter
+                                            leftPadding: 8
+                                        }
+
+                                        background: Rectangle {
+                                            color: highlighted ? bgHover : "transparent"
+                                            radius: 4
+                                        }
+
+                                        highlighted: categoryCombo.highlightedIndex === index
+                                    }
+
+                                    indicator: Text {
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 8
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "▼"
+                                        font.pixelSize: 8
+                                        color: textMuted
+                                    }
+
+                                    contentItem: Text {
+                                        leftPadding: 8
+                                        rightPadding: 20
+                                        text: categoryCombo.displayText
+                                        font.pixelSize: 11
+                                        color: textPrimary
+                                        verticalAlignment: Text.AlignVCenter
+                                        elide: Text.ElideRight
+                                    }
+
+                                    background: Rectangle {
+                                        color: "transparent"
+                                    }
+
+                                    popup: Popup {
+                                        y: categoryCombo.height + 2
+                                        width: categoryCombo.width
+                                        implicitHeight: Math.min(contentItem.implicitHeight + 8, 250)
+                                        padding: 4
+
+                                        contentItem: ListView {
+                                            clip: true
+                                            implicitHeight: contentHeight
+                                            model: categoryCombo.popup.visible ? categoryCombo.delegateModel : null
+                                            currentIndex: categoryCombo.highlightedIndex
+                                            ScrollIndicator.vertical: ScrollIndicator {}
+                                        }
+
+                                        background: Rectangle {
+                                            color: bgElevated
+                                            radius: 4
+                                            border.color: divider
+                                            border.width: 1
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Column {
+                            width: (parent.width - 8) / 2
+                            spacing: 3
+                            Text { text: "Search"; font.pixelSize: 10; color: textMuted }
+                            TextField {
+                                id: itemSearchField
+                                width: parent.width; height: 28
+                                placeholderText: "Filter..."
+                                font.pixelSize: 11; color: textPrimary
+                                leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                                background: Rectangle {
+                                    color: bgHover; radius: 4
+                                    border.color: itemSearchField.activeFocus ? accentPrimary : divider
+                                    border.width: 1
+                                }
+                                onTextChanged: attachedItemDialog.filterItems(text)
+                            }
+                        }
+                    }
+
+                    // Item count
+                    Text {
+                        text: attachedItemDialog.filteredItems.length + " items"
+                        font.pixelSize: 10
+                        color: textMuted
+                    }
+
+                    // Item list
+                    Rectangle {
+                        width: parent.width
+                        height: parent.height - 115  // Remaining space
+                        color: bgBase
+                        radius: 4
+                        border.color: divider
+                        border.width: 1
+                        clip: true
+
+                        ListView {
+                            id: itemListView
+                            anchors.fill: parent
+                            anchors.margins: 2
+                            model: attachedItemDialog.filteredItems
+                            clip: true
+
+                            ScrollBar.vertical: ScrollBar {
+                                policy: ScrollBar.AsNeeded
+                            }
+
+                            delegate: Rectangle {
+                                width: itemListView.width - 8
+                                height: 26
+                                radius: 4
+                                color: {
+                                    var currentHex = parseInt(attachedItemDialogField.text, 16)
+                                    if (modelData.hex === currentHex) return bgActive
+                                    return itemDelegateArea.containsMouse ? bgHover : "transparent"
+                                }
+
+                                Text {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    verticalAlignment: Text.AlignVCenter
+                                    text: modelData.display
+                                    font.pixelSize: 11
+                                    font.family: "Consolas, monospace"
+                                    color: {
+                                        var currentHex = parseInt(attachedItemDialogField.text, 16)
+                                        if (modelData.hex === currentHex) return accentPrimary
+                                        return textSecondary
+                                    }
+                                    elide: Text.ElideRight
+                                }
+
+                                MouseArea {
+                                    id: itemDelegateArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        attachedItemDialog.selectItem(modelData.hex)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Empty state
+                        Text {
+                            anchors.centerIn: parent
+                            text: "No items found"
+                            font.pixelSize: 11
+                            color: textMuted
+                            visible: attachedItemDialog.filteredItems.length === 0
+                        }
+                    }
+                }
+            }
+
+            // Footer
+            Item {
+                width: parent.width
+                height: 40
+
+                Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: divider }
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 8
+
+                    Text {
+                        text: "Cancel"
+                        font.pixelSize: 11
+                        color: attachedItemCancelArea.containsMouse ? textPrimary : textSecondary
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        MouseArea {
+                            id: attachedItemCancelArea
+                            anchors.fill: parent
+                            anchors.margins: -8
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                itemSearchField.text = ""
+                                attachedItemDialog.close()
+                            }
+                        }
+                    }
+
+                    Rectangle { width: 1; height: 16; color: divider; anchors.verticalCenter: parent.verticalCenter }
+
+                    Rectangle {
+                        width: 52; height: 24; radius: 4
+                        color: attachedItemSaveArea.pressed ? Qt.darker(accentPrimary, 1.1) :
+                               attachedItemSaveArea.containsMouse ? Qt.lighter(accentPrimary, 1.05) : accentPrimary
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Save"
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            color: "#FFFFFF"
+                        }
+
+                        MouseArea {
+                            id: attachedItemSaveArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                var itemHex = attachedItemDialogField.text.toUpperCase()
+                                backend.attachedItem = parseInt(itemHex, 16) || 0xFFF1
+                                itemSearchField.text = ""
+                                attachedItemDialog.close()
                                 canvas.forceActiveFocus()
                             }
                         }
@@ -1802,6 +2308,114 @@ ApplicationWindow {
 
         onCancelled: {
             pendingAction = null
+        }
+    }
+
+    // Hex Viewer Dialog
+    Popup {
+        id: hexViewerDialog
+        modal: true
+        anchors.centerIn: parent
+        width: 620
+        height: 450
+        padding: 0
+
+        property string hexContent: ""
+
+        background: Rectangle {
+            color: bgElevated
+            radius: 12
+            border.color: divider
+            border.width: 1
+        }
+
+        contentItem: Column {
+            spacing: 0
+
+            // Header
+            Rectangle {
+                width: parent.width
+                height: 40
+                color: bgSurface
+                radius: 12
+
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 12
+                    color: bgSurface
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Letter Hex View"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                    color: textPrimary
+                }
+
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: divider
+                }
+
+                // Close button
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 28
+                    height: 28
+                    radius: 6
+                    color: hexCloseArea.containsMouse ? bgHover : "transparent"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "×"
+                        font.pixelSize: 16
+                        color: hexCloseArea.containsMouse ? textPrimary : textSecondary
+                    }
+
+                    MouseArea {
+                        id: hexCloseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: hexViewerDialog.close()
+                    }
+                }
+            }
+
+            // Hex content area
+            Rectangle {
+                width: parent.width
+                height: hexViewerDialog.height - 40
+                color: "transparent"
+
+                ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    clip: true
+
+                    TextArea {
+                        id: hexTextArea
+                        text: hexViewerDialog.hexContent
+                        readOnly: true
+                        font.family: "Consolas, Monaco, 'Courier New', monospace"
+                        font.pixelSize: 11
+                        color: textPrimary
+                        wrapMode: TextArea.NoWrap
+                        selectByMouse: true
+
+                        background: Rectangle {
+                            color: bgBase
+                            radius: 6
+                        }
+                    }
+                }
+            }
         }
     }
 

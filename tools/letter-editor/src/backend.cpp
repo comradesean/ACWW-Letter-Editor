@@ -53,23 +53,43 @@ static uint32_t calculateCRC32(const QByteArray& data) {
 
 // ACWW Western character encoding table (256 entries)
 // Maps byte values 0x00-0xFF to Unicode characters
+// Note: Some characters have alternate interpretations:
+//   0x3F: ⨍ (script f) - could also be ƒ (Latin small f with hook)
+//   0x65: β (Greek beta) - could also be ß (German eszett), visually similar
+//   0xDC: h (plain h) - could also be ℎ (mathematical italic h)
 static const char* acwwCharTable[256] = {
-    "\0", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",        // 0x00-0x0F
-    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e",         // 0x10-0x1F
-    "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",         // 0x20-0x2F
-    "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "f",         // 0x30-0x3F
-    "s", "O", "Z", "s", "o", "z", "Y", "A", "A", "A", "A", "A", "A", "A", "C", "E",         // 0x40-0x4F (accented)
-    "E", "E", "E", "I", "I", "I", "I", "D", "N", "O", "O", "O", "O", "O", "O", "U",         // 0x50-0x5F
-    "U", "U", "U", "Y", "T", "s", "a", "a", "a", "a", "a", "a", "a", "c", "e", "e",         // 0x60-0x6F
-    "e", "e", "i", "i", "i", "i", "d", "n", "o", "o", "o", "o", "o", "o", "u", "u",         // 0x70-0x7F
-    "u", "u", "y", "t", "y", " ", "\n", "!", "\"", "#", "$", "%", "&", "'", "(", ")",       // 0x80-0x8F
-    "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "{", "]",         // 0x90-0x9F
-    "|", "_", "}", ",", ".", ".", "~", "L", "+", "+", "^", "%", "<", "`", "\"", "*",        // 0xA0-0xAF
-    "-", "'", "-", "\"", "T", ">", " ", "~", "Y", "|", "S", "!", "c", "L", " ", "c",        // 0xB0-0xBF
-    "a", "<", "-", "-", "R", "o", "+", "2", "3", "-", "s", "P", ">", "1", "o",              // 0xC0-0xCE
-    ">", ".", "1", "1", "3", " ", " ", " ", " ", "?", "x", "/", " ", "*", " ", " ",         // 0xCF-0xDF (special chars)
-    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",         // 0xE0-0xEF
-    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " "          // 0xF0-0xFF
+    // 0x00-0x0F: Null + A-O
+    "\0", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    // 0x10-0x1F: P-Z + a-e
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e",
+    // 0x20-0x2F: f-u
+    "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",
+    // 0x30-0x3F: v-z, 0-9, script f
+    "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "⨍",
+    // 0x40-0x4F: Extended Latin (Œ, Ž, etc.) and accented capitals
+    "ⓢ", "Œ", "Ž", "š", "œ", "ž", "Ÿ", "À", "Á", "Â", "Ã", "Ä", "Å", "Æ", "Ç", "È",
+    // 0x50-0x5F: More accented capitals
+    "É", "Ê", "Ë", "Ì", "Í", "Î", "Ï", "Đ", "Ñ", "Ò", "Ó", "Ô", "Õ", "Ö", "Ø", "Ù",
+    // 0x60-0x6F: Accented capitals continued + Greek beta + lowercase accented
+    "Ú", "Û", "Ü", "Ý", "Þ", "β", "à", "á", "â", "ã", "ä", "å", "æ", "ç", "è", "é",
+    // 0x70-0x7F: Lowercase accented continued
+    "ê", "ë", "ì", "í", "î", "ï", "ð", "ñ", "ò", "ó", "ô", "õ", "ö", "ø", "ù", "ú",
+    // 0x80-0x8F: More lowercase accented + space, newline, punctuation
+    "û", "ü", "ý", "þ", "ÿ", " ", "\n", "!", "\"", "#", "$", "%", "&", "´", "(", ")",
+    // 0x90-0x9F: Punctuation continued
+    "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "\\", "]",
+    // 0xA0-0xAF: More punctuation and special chars
+    "^", "_", "´", "{", "|", "}", "~", "€", ",", "„", "…", "†", "‡", "＾", "‰", "‹",
+    // 0xB0-0xBF: Quotes, bullets, dashes, special
+    "'", "'", """, """, "•", "–", "—", "˜", "™", "›", " ", "¡", "¢", "£", "¤", "¥",
+    // 0xC0-0xCF: Currency, legal, fractions
+    "¦", "§", "¨", "©", "ª", "«", "¬", "-", "®", "¯", "°", "±", "²", "³", "´", "µ",
+    // 0xD0-0xDF: More special chars, h, star, heart, music note
+    "¶", "·", "¸", "¹", "º", "»", "¼", "½", "¾", "¿", "×", "÷", "h", "★", "❤", "♪",
+    // 0xE0-0xEF: Unused/reserved
+    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",
+    // 0xF0-0xFF: Unused/reserved
+    " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " "
 };
 
 // LTR file format constants (EUR/USA)
@@ -96,9 +116,16 @@ static const int LTR_BODY_SIZE = 0x80;        // 128 bytes
 static const int LTR_SIGNATURE_OFFSET = 0xCC; // Signature/ending
 static const int LTR_SIGNATURE_SIZE = 0x20;   // 32 bytes
 
+// Flags
+static const int LTR_RECEIVER_FLAGS_OFFSET = 0x18;  // 4 bytes
+static const int LTR_SENDER_FLAGS_OFFSET = 0x30;    // 4 bytes
+
 // Metadata
 static const int LTR_NAME_POS_OFFSET = 0xEC;  // 1 byte - position to insert name in greeting
 static const int LTR_PAPER_OFFSET = 0xED;     // 1 byte
+static const int LTR_STATUS_OFFSET = 0xEE;    // 1 byte
+static const int LTR_ORIGIN_OFFSET = 0xEF;    // 1 byte
+static const int LTR_ITEM_OFFSET = 0xF0;      // 2 bytes (little-endian)
 
 // Decode ACWW bytes to QString
 static QString decodeAcwwText(const QByteArray& data) {
@@ -269,6 +296,54 @@ void Backend::setSenderPlayerId(int id) {
     }
 }
 
+void Backend::setAttachedItem(int item) {
+    uint16_t newItem = static_cast<uint16_t>(item & 0xFFFF);
+    if (newItem != m_attachedItem) {
+        m_attachedItem = newItem;
+        emit attachedItemChanged();
+    }
+}
+
+void Backend::setReceiverFlags(int flags) {
+    uint32_t newFlags = static_cast<uint32_t>(flags);
+    if (newFlags != m_receiverFlags) {
+        m_receiverFlags = newFlags;
+        emit letterMetadataChanged();
+    }
+}
+
+void Backend::setSenderFlags(int flags) {
+    uint32_t newFlags = static_cast<uint32_t>(flags);
+    if (newFlags != m_senderFlags) {
+        m_senderFlags = newFlags;
+        emit letterMetadataChanged();
+    }
+}
+
+void Backend::setNamePosition(int pos) {
+    uint8_t newPos = static_cast<uint8_t>(pos & 0xFF);
+    if (newPos != m_namePosition) {
+        m_namePosition = newPos;
+        emit letterMetadataChanged();
+    }
+}
+
+void Backend::setLetterStatus(int status) {
+    uint8_t newStatus = static_cast<uint8_t>(status & 0xFF);
+    if (newStatus != m_letterStatus) {
+        m_letterStatus = newStatus;
+        emit letterMetadataChanged();
+    }
+}
+
+void Backend::setLetterOrigin(int origin) {
+    uint8_t newOrigin = static_cast<uint8_t>(origin & 0xFF);
+    if (newOrigin != m_letterOrigin) {
+        m_letterOrigin = newOrigin;
+        emit letterMetadataChanged();
+    }
+}
+
 QImage Backend::getPaperImage(int index) const {
     if (index >= 0 && index < m_stationery.count()) {
         return m_stationery.getPaper(index);
@@ -414,6 +489,22 @@ bool Backend::importLtr(const QUrl& fileUrl) {
         paperId = 0;
     }
 
+    // Extract flags
+    uint32_t receiverFlags = static_cast<uint8_t>(data[LTR_RECEIVER_FLAGS_OFFSET]) |
+                             (static_cast<uint8_t>(data[LTR_RECEIVER_FLAGS_OFFSET + 1]) << 8) |
+                             (static_cast<uint8_t>(data[LTR_RECEIVER_FLAGS_OFFSET + 2]) << 16) |
+                             (static_cast<uint8_t>(data[LTR_RECEIVER_FLAGS_OFFSET + 3]) << 24);
+    uint32_t senderFlags = static_cast<uint8_t>(data[LTR_SENDER_FLAGS_OFFSET]) |
+                           (static_cast<uint8_t>(data[LTR_SENDER_FLAGS_OFFSET + 1]) << 8) |
+                           (static_cast<uint8_t>(data[LTR_SENDER_FLAGS_OFFSET + 2]) << 16) |
+                           (static_cast<uint8_t>(data[LTR_SENDER_FLAGS_OFFSET + 3]) << 24);
+
+    // Extract status, origin, and attached item
+    uint8_t letterStatus = static_cast<uint8_t>(data[LTR_STATUS_OFFSET]);
+    uint8_t letterOrigin = static_cast<uint8_t>(data[LTR_ORIGIN_OFFSET]);
+    uint16_t attachedItem = static_cast<uint8_t>(data[LTR_ITEM_OFFSET]) |
+                            (static_cast<uint8_t>(data[LTR_ITEM_OFFSET + 1]) << 8);
+
     // Store the separate sections for use by canvas.setLetterContent()
     m_letterHeader = subject;
     m_letterBody = body;
@@ -433,6 +524,12 @@ bool Backend::importLtr(const QUrl& fileUrl) {
     m_senderPlayerId = senderPlayerId;
     m_recipientNameStart = recipientStart;
     m_recipientNameEnd = recipientEnd;
+    m_receiverFlags = receiverFlags;
+    m_senderFlags = senderFlags;
+    m_namePosition = namePos;
+    m_letterStatus = letterStatus;
+    m_letterOrigin = letterOrigin;
+    m_attachedItem = attachedItem;
     setLetterText(letterText);
     setCurrentPaper(paperId);
 
@@ -494,8 +591,22 @@ bool Backend::exportLtr(const QUrl& fileUrl) const {
         data[LTR_SIGNATURE_OFFSET + i] = sigEncoded[i];
     }
 
-    // Write paper ID
+    // Write paper ID and metadata
     data[LTR_PAPER_OFFSET] = static_cast<char>(m_currentPaper & 0x3F);
+    data[LTR_STATUS_OFFSET] = static_cast<char>(m_letterStatus);
+    data[LTR_ORIGIN_OFFSET] = static_cast<char>(m_letterOrigin);
+    data[LTR_ITEM_OFFSET] = static_cast<char>(m_attachedItem & 0xFF);
+    data[LTR_ITEM_OFFSET + 1] = static_cast<char>((m_attachedItem >> 8) & 0xFF);
+
+    // Write flags
+    data[LTR_RECEIVER_FLAGS_OFFSET] = static_cast<char>(m_receiverFlags & 0xFF);
+    data[LTR_RECEIVER_FLAGS_OFFSET + 1] = static_cast<char>((m_receiverFlags >> 8) & 0xFF);
+    data[LTR_RECEIVER_FLAGS_OFFSET + 2] = static_cast<char>((m_receiverFlags >> 16) & 0xFF);
+    data[LTR_RECEIVER_FLAGS_OFFSET + 3] = static_cast<char>((m_receiverFlags >> 24) & 0xFF);
+    data[LTR_SENDER_FLAGS_OFFSET] = static_cast<char>(m_senderFlags & 0xFF);
+    data[LTR_SENDER_FLAGS_OFFSET + 1] = static_cast<char>((m_senderFlags >> 8) & 0xFF);
+    data[LTR_SENDER_FLAGS_OFFSET + 2] = static_cast<char>((m_senderFlags >> 16) & 0xFF);
+    data[LTR_SENDER_FLAGS_OFFSET + 3] = static_cast<char>((m_senderFlags >> 24) & 0xFF);
 
     // Write recipient info
     data[LTR_TO_TOWN_ID_OFFSET] = static_cast<char>(m_recipientTownId & 0xFF);
@@ -824,6 +935,14 @@ void Backend::loadCurrentSlot() {
     m_recipientNameStart = letter.namePosition;
     m_recipientNameEnd = letter.namePosition + letter.toPlayerName.length();
 
+    // Load all metadata fields
+    m_receiverFlags = letter.receiverFlags;
+    m_senderFlags = letter.senderFlags;
+    m_namePosition = letter.namePosition;
+    m_letterStatus = letter.status;
+    m_letterOrigin = letter.originType;
+    m_attachedItem = letter.attachedItem;
+
     // Store sections
     m_letterHeader = greetingWithName;
     m_letterBody = letter.body;
@@ -843,6 +962,7 @@ void Backend::loadCurrentSlot() {
     emit recipientNamePositionChanged();
     emit currentPaperChanged();
     emit paperChanged();
+    emit attachedItemChanged();
 
     qDebug() << "Backend::loadCurrentSlot: Loaded player" << m_currentPlayer
              << "storage" << m_currentStorageType << "slot" << m_currentSlot;
@@ -893,7 +1013,13 @@ void Backend::saveCurrentSlot() {
     letter.body = body;
     letter.signature = signature;
     letter.stationeryType = m_currentPaper;
-    letter.status = LetterStatus::OPENED;  // Mark as opened when edited
+
+    // Preserve all metadata fields
+    letter.receiverFlags = m_receiverFlags;
+    letter.senderFlags = m_senderFlags;
+    letter.status = m_letterStatus;
+    letter.originType = m_letterOrigin;
+    letter.attachedItem = m_attachedItem;
 
     // Save to file
     m_saveFile.setLetter(m_currentPlayer, m_currentStorageType, m_currentSlot, letter);
@@ -926,7 +1052,16 @@ void Backend::clearLetter() {
     m_recipientNameEnd = -1;
     m_currentPaper = 0;
 
+    // Reset metadata fields to defaults
+    m_receiverFlags = 0;
+    m_senderFlags = 0;
+    m_namePosition = 0;
+    m_letterStatus = 0;
+    m_letterOrigin = 0;
+    m_attachedItem = 0xFFF1;  // "No item" value
+
     emit letterTextChanged();
+    emit attachedItemChanged();
     emit recipientInfoChanged();
     emit senderInfoChanged();
     emit recipientNamePositionChanged();
@@ -988,4 +1123,258 @@ bool Backend::playerExists(int player) const {
         return false;
     }
     return m_saveFile.playerExists(player);
+}
+
+QString Backend::getLetterHex() const {
+    QByteArray data;
+
+    // Always reconstruct from current UI fields to show what's in the editor
+    {
+        // Build the letter data (same as exportLtr)
+        int firstNewline = m_letterText.indexOf('\n');
+        int lastNewline = m_letterText.lastIndexOf('\n');
+
+        QString subject, body, signature;
+        if (firstNewline < 0) {
+            subject = m_letterText;
+        } else if (firstNewline == lastNewline) {
+            subject = m_letterText.left(firstNewline);
+            body = m_letterText.mid(firstNewline + 1);
+        } else {
+            subject = m_letterText.left(firstNewline);
+            body = m_letterText.mid(firstNewline + 1, lastNewline - firstNewline - 1);
+            signature = m_letterText.mid(lastNewline + 1);
+        }
+
+        // Create LTR buffer (244 bytes)
+        data = QByteArray(LTR_FILE_SIZE, 0);
+
+        // Encode and write subject
+        QByteArray subjectEncoded = encodeAcwwText(subject, LTR_SUBJECT_SIZE);
+        for (int i = 0; i < LTR_SUBJECT_SIZE; i++) {
+            data[LTR_SUBJECT_OFFSET + i] = subjectEncoded[i];
+        }
+
+        // Encode and write body
+        QByteArray bodyEncoded = encodeAcwwText(body, LTR_BODY_SIZE);
+        for (int i = 0; i < LTR_BODY_SIZE; i++) {
+            data[LTR_BODY_OFFSET + i] = bodyEncoded[i];
+        }
+
+        // Encode and write signature
+        QByteArray sigEncoded = encodeAcwwText(signature, LTR_SIGNATURE_SIZE);
+        for (int i = 0; i < LTR_SIGNATURE_SIZE; i++) {
+            data[LTR_SIGNATURE_OFFSET + i] = sigEncoded[i];
+        }
+
+        // Write paper ID and metadata
+        data[LTR_PAPER_OFFSET] = static_cast<char>(m_currentPaper & 0x3F);
+        data[LTR_STATUS_OFFSET] = static_cast<char>(m_letterStatus);
+        data[LTR_ORIGIN_OFFSET] = static_cast<char>(m_letterOrigin);
+        data[LTR_ITEM_OFFSET] = static_cast<char>(m_attachedItem & 0xFF);
+        data[LTR_ITEM_OFFSET + 1] = static_cast<char>((m_attachedItem >> 8) & 0xFF);
+
+        // Write flags
+        data[LTR_RECEIVER_FLAGS_OFFSET] = static_cast<char>(m_receiverFlags & 0xFF);
+        data[LTR_RECEIVER_FLAGS_OFFSET + 1] = static_cast<char>((m_receiverFlags >> 8) & 0xFF);
+        data[LTR_RECEIVER_FLAGS_OFFSET + 2] = static_cast<char>((m_receiverFlags >> 16) & 0xFF);
+        data[LTR_RECEIVER_FLAGS_OFFSET + 3] = static_cast<char>((m_receiverFlags >> 24) & 0xFF);
+        data[LTR_SENDER_FLAGS_OFFSET] = static_cast<char>(m_senderFlags & 0xFF);
+        data[LTR_SENDER_FLAGS_OFFSET + 1] = static_cast<char>((m_senderFlags >> 8) & 0xFF);
+        data[LTR_SENDER_FLAGS_OFFSET + 2] = static_cast<char>((m_senderFlags >> 16) & 0xFF);
+        data[LTR_SENDER_FLAGS_OFFSET + 3] = static_cast<char>((m_senderFlags >> 24) & 0xFF);
+
+        // Write recipient info
+        data[LTR_TO_TOWN_ID_OFFSET] = static_cast<char>(m_recipientTownId & 0xFF);
+        data[LTR_TO_TOWN_ID_OFFSET + 1] = static_cast<char>((m_recipientTownId >> 8) & 0xFF);
+        QByteArray recipientTownEncoded = encodeAcwwText(m_recipientTown, 8);
+        for (int i = 0; i < 8; i++) {
+            data[LTR_TO_TOWN_OFFSET + i] = recipientTownEncoded[i];
+        }
+        data[LTR_TO_PLAYER_ID_OFFSET] = static_cast<char>(m_recipientPlayerId & 0xFF);
+        data[LTR_TO_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_recipientPlayerId >> 8) & 0xFF);
+        QByteArray recipientNameEncoded = encodeAcwwText(m_recipientName, 8);
+        for (int i = 0; i < 8; i++) {
+            data[LTR_TO_NAME_OFFSET + i] = recipientNameEncoded[i];
+        }
+
+        // Write sender info
+        data[LTR_FROM_TOWN_ID_OFFSET] = static_cast<char>(m_senderTownId & 0xFF);
+        data[LTR_FROM_TOWN_ID_OFFSET + 1] = static_cast<char>((m_senderTownId >> 8) & 0xFF);
+        QByteArray senderTownEncoded = encodeAcwwText(m_senderTown, 8);
+        for (int i = 0; i < 8; i++) {
+            data[LTR_FROM_TOWN_OFFSET + i] = senderTownEncoded[i];
+        }
+        data[LTR_FROM_PLAYER_ID_OFFSET] = static_cast<char>(m_senderPlayerId & 0xFF);
+        data[LTR_FROM_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_senderPlayerId >> 8) & 0xFF);
+        QByteArray senderNameEncoded = encodeAcwwText(m_senderName, 8);
+        for (int i = 0; i < 8; i++) {
+            data[LTR_FROM_NAME_OFFSET + i] = senderNameEncoded[i];
+        }
+    }
+
+    // Format as hex dump
+    QString result;
+    result += "Offset    00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F   ASCII\n";
+    result += "--------  ------------------------------------------------  ----------------\n";
+
+    for (int i = 0; i < data.size(); i += 16) {
+        // Offset
+        result += QString("%1  ").arg(i, 8, 16, QChar('0')).toUpper();
+
+        // Hex bytes
+        QString hexPart;
+        QString asciiPart;
+        for (int j = 0; j < 16; j++) {
+            if (i + j < data.size()) {
+                uint8_t byte = static_cast<uint8_t>(data[i + j]);
+                hexPart += QString("%1 ").arg(byte, 2, 16, QChar('0')).toUpper();
+                asciiPart += (byte >= 32 && byte < 127) ? QChar(byte) : QChar('.');
+            } else {
+                hexPart += "   ";
+            }
+            if (j == 7) hexPart += " ";
+        }
+
+        result += hexPart + " " + asciiPart + "\n";
+    }
+
+    return result;
+}
+
+// Item database access methods
+
+QString Backend::attachedItemName() const {
+    if (ItemDatabase::isNoItem(m_attachedItem)) {
+        return QStringLiteral("(No item)");
+    }
+    QString name = ItemDatabase::getItemName(m_attachedItem);
+    if (name.isEmpty()) {
+        return QString("Unknown (0x%1)").arg(m_attachedItem, 4, 16, QChar('0')).toUpper();
+    }
+    return name;
+}
+
+QString Backend::getItemName(int hexCode) const {
+    if (ItemDatabase::isNoItem(static_cast<uint16_t>(hexCode))) {
+        return QStringLiteral("(No item)");
+    }
+    QString name = ItemDatabase::getItemName(static_cast<uint16_t>(hexCode));
+    if (name.isEmpty()) {
+        return QString("Unknown (0x%1)").arg(hexCode, 4, 16, QChar('0')).toUpper();
+    }
+    return name;
+}
+
+QVariantList Backend::getItemList() const {
+    QVariantList result;
+
+    // Add "No item" entry first
+    QVariantMap noItem;
+    noItem["hex"] = static_cast<int>(ItemDatabase::NO_ITEM);
+    noItem["name"] = QStringLiteral("(No item)");
+    noItem["display"] = QStringLiteral("FFF1 - (No item)");
+    result.append(noItem);
+
+    // Get all items from database
+    QList<QPair<uint16_t, QString>> items = ItemDatabase::getAllItems();
+    for (const auto& item : items) {
+        QVariantMap entry;
+        entry["hex"] = static_cast<int>(item.first);
+        entry["name"] = item.second;
+        QString hexStr = QString("%1").arg(item.first, 4, 16, QChar('0')).toUpper();
+        entry["display"] = hexStr + " - " + item.second;
+        result.append(entry);
+    }
+
+    return result;
+}
+
+QStringList Backend::getItemCategories() const {
+    return QStringList{
+        QStringLiteral("All"),
+        QStringLiteral("Stationery"),
+        QStringLiteral("Wallpaper"),
+        QStringLiteral("Carpet/Flooring"),
+        QStringLiteral("Clothing"),
+        QStringLiteral("Insects"),
+        QStringLiteral("Fish"),
+        QStringLiteral("Trash"),
+        QStringLiteral("K.K. Songs"),
+        QStringLiteral("Tools"),
+        QStringLiteral("Umbrellas"),
+        QStringLiteral("Hats"),
+        QStringLiteral("Hair Accessories"),
+        QStringLiteral("Flowers"),
+        QStringLiteral("Glasses"),
+        QStringLiteral("Facial Accessories"),
+        QStringLiteral("Bags of Bells"),
+        QStringLiteral("Furniture"),
+        QStringLiteral("Paintings"),
+        QStringLiteral("Museum Displays"),
+        QStringLiteral("Villager Pictures")
+    };
+}
+
+QVariantList Backend::getItemsByCategory(const QString& categoryName) const {
+    QVariantList result;
+
+    // Map category name to enum
+    ItemDatabase::Category category = ItemDatabase::Category::Unknown;
+    if (categoryName == "All") {
+        return getItemList();  // Return all items
+    } else if (categoryName == "Stationery") {
+        category = ItemDatabase::Category::Stationery;
+    } else if (categoryName == "Wallpaper") {
+        category = ItemDatabase::Category::Wallpaper;
+    } else if (categoryName == "Carpet/Flooring") {
+        category = ItemDatabase::Category::Carpet;
+    } else if (categoryName == "Clothing") {
+        category = ItemDatabase::Category::Clothing;
+    } else if (categoryName == "Insects") {
+        category = ItemDatabase::Category::Insects;
+    } else if (categoryName == "Fish") {
+        category = ItemDatabase::Category::Fish;
+    } else if (categoryName == "Trash") {
+        category = ItemDatabase::Category::Trash;
+    } else if (categoryName == "K.K. Songs") {
+        category = ItemDatabase::Category::Songs;
+    } else if (categoryName == "Tools") {
+        category = ItemDatabase::Category::Tools;
+    } else if (categoryName == "Umbrellas") {
+        category = ItemDatabase::Category::Umbrellas;
+    } else if (categoryName == "Hats") {
+        category = ItemDatabase::Category::Hats;
+    } else if (categoryName == "Hair Accessories") {
+        category = ItemDatabase::Category::HairAccessories;
+    } else if (categoryName == "Flowers") {
+        category = ItemDatabase::Category::Flowers;
+    } else if (categoryName == "Glasses") {
+        category = ItemDatabase::Category::Glasses;
+    } else if (categoryName == "Facial Accessories") {
+        category = ItemDatabase::Category::FacialAccessories;
+    } else if (categoryName == "Bags of Bells") {
+        category = ItemDatabase::Category::Bells;
+    } else if (categoryName == "Furniture") {
+        category = ItemDatabase::Category::Furniture;
+    } else if (categoryName == "Paintings") {
+        category = ItemDatabase::Category::Paintings;
+    } else if (categoryName == "Museum Displays") {
+        category = ItemDatabase::Category::MuseumDisplays;
+    } else if (categoryName == "Villager Pictures") {
+        category = ItemDatabase::Category::VillagerPictures;
+    }
+
+    // Get items for this category
+    QList<QPair<uint16_t, QString>> items = ItemDatabase::getItemsByCategory(category);
+    for (const auto& item : items) {
+        QVariantMap entry;
+        entry["hex"] = static_cast<int>(item.first);
+        entry["name"] = item.second;
+        QString hexStr = QString("%1").arg(item.first, 4, 16, QChar('0')).toUpper();
+        entry["display"] = hexStr + " - " + item.second;
+        result.append(entry);
+    }
+
+    return result;
 }

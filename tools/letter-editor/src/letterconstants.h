@@ -19,7 +19,7 @@ namespace LetterConstants {
     // the recipient name consumes when determining if more characters can fit in the header.
     // Visual rendering (cursor position, selection, click detection) uses actual character
     // widths from the font, not this constant.
-    constexpr int NAME_TOKEN_WIDTH = 55;
+    constexpr int NAME_TOKEN_WIDTH = 54;
 
     // Character limits
     // File format: subject (16) + body (100) + signature (26)

@@ -525,6 +525,7 @@ The stationery ID at offset `0xED` maps to one of 64 paper backgrounds (values 0
 
 ---
 
+
 ## Appendix
 
 ### Known Sender Examples
