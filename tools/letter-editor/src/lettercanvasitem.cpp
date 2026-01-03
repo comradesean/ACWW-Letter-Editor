@@ -255,21 +255,24 @@ void LetterCanvasItem::insertChar(const QString& ch) {
             int headerLenWithoutName = m_header.length() - recipientLen;
             if (headerLenWithoutName >= MAX_HEADER_CHARS) return;
 
-            // Check pixel width limit
-            // NAME_TOKEN_WIDTH is always reserved for the name placeholder
-            QString testHeader = m_header;
-            testHeader.insert(m_cursorPosInSection, ch);
-            int testWidth = NAME_TOKEN_WIDTH;
+            // Check pixel width limit for template (non-name) characters
+            // Template width must fit in MAX_LINE_WIDTH - NAME_TOKEN_WIDTH
+            const int maxTemplateWidth = MAX_LINE_WIDTH - NAME_TOKEN_WIDTH;
             const FontLoader& font = m_backend->font();
-            for (int i = 0; i < testHeader.length(); i++) {
-                // Skip recipient name characters - their space is already reserved
+            int templateWidth = 0;
+
+            // Calculate current template width (excluding name)
+            for (int i = 0; i < m_header.length(); i++) {
                 if (recipientStart >= 0 && recipientEnd >= 0 &&
-                    i >= recipientStart && i < recipientEnd + 1) {
+                    i >= recipientStart && i < recipientEnd) {
                     continue;
                 }
-                testWidth += font.charWidth(testHeader[i]) + GLYPH_SPACING;
+                templateWidth += font.charWidth(m_header[i]) + GLYPH_SPACING;
             }
-            if (testWidth > MAX_LINE_WIDTH) return;
+
+            // Check if adding the new character would exceed the limit
+            int newCharWidth = font.charWidth(ch[0]) + GLYPH_SPACING;
+            if (templateWidth + newCharWidth > maxTemplateWidth) return;
 
             // Protect recipient name
             if (recipientStart >= 0 && recipientEnd >= 0 &&
@@ -788,20 +791,20 @@ int LetterCanvasItem::calculateHeaderWidth(const QString& newRecipientName) cons
     int recipientStart = m_backend->recipientNameStart();
     int recipientEnd = m_backend->recipientNameEnd();
 
-    // NAME_TOKEN_WIDTH is always reserved for the name placeholder
-    int totalWidth = NAME_TOKEN_WIDTH;
+    // Calculate template width (excluding name)
+    int templateWidth = 0;
     const FontLoader& font = m_backend->font();
     bool hasName = (recipientStart >= 0 && recipientEnd >= 0 && recipientEnd <= m_header.length());
 
     for (int i = 0; i < m_header.length(); i++) {
-        // Skip recipient name characters - their space is already reserved
         if (hasName && i >= recipientStart && i < recipientEnd) {
             continue;
         }
-        totalWidth += font.charWidth(m_header[i]) + GLYPH_SPACING;
+        templateWidth += font.charWidth(m_header[i]) + GLYPH_SPACING;
     }
 
-    return totalWidth;
+    // Return total width: template + reserved name space
+    return templateWidth + NAME_TOKEN_WIDTH;
 }
 
 void LetterCanvasItem::charPosFromPoint(qreal x, qreal y, int& outSection, int& outPosInSection) const {
