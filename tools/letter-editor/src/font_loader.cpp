@@ -182,13 +182,13 @@ void FontLoader::buildCharacterMap() {
     //   0x23 = x symbol
     //   0x24 = star ★
     //   0x25 = right arrow
-    //   0x26 = heart ❤
-    //   0x27 = music note ♪
+    //   0x26 = music note ♪
+    //   0x27 = heart ❤
     if (!m_subGlyphs.empty()) {
         // Map Unicode special characters to fontASub glyph codes
         m_charMap[0x2605] = {true, 0x24};   // ★ BLACK STAR
-        m_charMap[0x2764] = {true, 0x26};   // ❤ HEAVY BLACK HEART
-        m_charMap[0x266A] = {true, 0x27};   // ♪ EIGHTH NOTE
+        m_charMap[0x266A] = {true, 0x26};   // ♪ EIGHTH NOTE
+        m_charMap[0x2764] = {true, 0x27};   // ❤ HEAVY BLACK HEART
         m_charMap[0xE000] = {true, 0x21};   // 💧 DROPLET (stored as PUA U+E000)
         m_charMap[0x1F4A7] = {true, 0x21};  // 💧 DROPLET (for paste detection)
 
