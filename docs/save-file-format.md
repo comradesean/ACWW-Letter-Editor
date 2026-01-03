@@ -58,11 +58,11 @@ Each letter occupies exactly **244 bytes (`0xF4`)**, structured as follows:
 | `0x34-0x4B` | 24 bytes (`0x18`) | Greeting | Subject/greeting line |
 | `0x4C-0xCB` | 128 bytes (`0x80`) | Body | Main letter content |
 | `0xCC-0xEB` | 32 bytes (`0x20`) | Signature | Letter closing/signature |
-| `0xEC` | 1 byte | Name Position | Position of recipient name in greeting (`0x00-0x10`) |
+| `0xEC` | 1 byte | Name Position | Position of recipient name in greeting (`0x00-0x18`, i.e. 0-24) |
 | `0xED` | 1 byte | Stationery ID | Paper background (0-63); see [Stationery Reference](#stationery-reference) |
-| `0xEE` | 1 byte | Letter Status | Read/unread state; see [Letter Status](#letter-status) |
-| `0xEF` | 1 byte | Letter Origin | Source type; see [Letter Origin](#letter-origin) |
-| `0xF0-0xF1` | 2 bytes | Attached Item | Item hex code (little-endian) |
+| `0xEE` | 1 byte | Letter Icon/Flags | Icon and state flags; see [Letter Icon/Flags](#letter-iconflags) |
+| `0xEF` | 1 byte | Letter Source | NPC/system sender; see [Letter Source](#letter-source) |
+| `0xF0-0xF1` | 2 bytes | Attached Item | Item hex code (little-endian); `0xFFF1` = no item |
 | `0xF2-0xF3` | 2 bytes | Footer | Always `00 00` |
 
 ### Visual Layout
@@ -104,27 +104,59 @@ Located at offset `0x30-0x33` (4 bytes).
 
 ---
 
-### Letter Status
+### Letter Icon/Flags
 
 Located at offset `0xEE` (1 byte).
 
-| Value | Meaning |
-|-------|---------|
-| `0x42` | Unread (untouched) |
-| `0x03` | Opened (read) |
-| `0x06` | Opened bottled letter |
+**Base Icon Values:**
+
+| Value | Icon | Meaning |
+|-------|------|---------|
+| `0x00` | - | Non-existent letter (should only appear in zeroed-out slots) |
+| `0x01` | White | Letter being written, not yet mailed |
+| `0x02` | White sealed | Received letter, unopened |
+| `0x03` | White open | Received letter, opened |
+| `0x04` | Bottle | Bottle Mail being written |
+| `0x05` | Bottle sealed | Received Bottle Mail, unopened |
+| `0x06` | Bottle open | Received Bottle Mail, opened |
+| `0x07` | Green sealed | Villager favor letter (Letter Delivery), unopened |
+| `0x08` | Green open | Villager favor letter, opened |
+
+**Attachment Flag:**
+
+| Flag | Effect |
+|------|--------|
+| `+ 0x40` | Received letter has attachment (e.g., `0x02` + `0x40` = `0x42`) |
+
+Only applies to received/delivered letters (`0x02`, `0x03`, `0x05`*, `0x06`*, `0x07`*, `0x08`*). Outgoing letters (`0x01`, `0x04`*) do not use this flag.
+
+*`0x04`-`0x08` believed to follow the same rules but not observed in-game.
+
+**Notes:**
+- `0x00`, `0x40`, `0x80`, `0xC0` appear identical, but `0x80` and `0xC0` have not been observed in-game
+- Values not listed above result in glitchy icons
 
 ---
 
-### Letter Origin
+### Letter Source
 
 Located at offset `0xEF` (1 byte).
 
-| Value | Meaning |
-|-------|---------|
-| `0x00` | Written letter (not sent) |
-| `0x0C` | Bottled letter |
-| `0x11` | Nintendo letter |
+Identifies the NPC or system that sent the letter. Most NPC sources have a unique identifier.
+
+| Value | Source |
+|-------|--------|
+| `0x00` | Players, Villagers or Bottle (e.g., Katrina's "Dear Some Stranger,") |
+| `0x01` | Mom |
+| `0x02` | H.R.A. (Happy Room Academy) |
+| `0x03` | Tom Nook |
+| `0x04` | Museum |
+| `0x06` | Town Hall |
+| `0x07` | Lyle (Insurance) |
+| `0x0A` | Snowman |
+| `0x0B` | Redd |
+| `0x0C` | Bottle (e.g., Hayseed Hilda's "I Crave Apples") |
+| `0x11` | Nintendo / S. Iwata / Tortimer |
 
 ---
 
