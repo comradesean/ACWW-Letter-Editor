@@ -71,6 +71,7 @@ static const uint32_t PLAYER_TOWN_ID_OFFSET_EUR = 0x2276;
 static const uint32_t PLAYER_TOWN_NAME_OFFSET_EUR = 0x2278;
 static const uint32_t PLAYER_ID_OFFSET_EUR = 0x2280;
 static const uint32_t PLAYER_NAME_OFFSET_EUR = 0x2282;
+static const uint32_t PLAYER_GENDER_OFFSET_EUR = 0x228A;  // 0=male, 1=female
 
 static const uint32_t PLAYER_NAME_OFFSETS[4] = {
     PLAYER_DATA_START + PLAYER_NAME_OFFSET_EUR,
@@ -98,6 +99,13 @@ static const uint32_t TOWN_ID_OFFSETS[4] = {
     PLAYER_DATA_START + PLAYER_DATA_SIZE + PLAYER_TOWN_ID_OFFSET_EUR,
     PLAYER_DATA_START + PLAYER_DATA_SIZE * 2 + PLAYER_TOWN_ID_OFFSET_EUR,
     PLAYER_DATA_START + PLAYER_DATA_SIZE * 3 + PLAYER_TOWN_ID_OFFSET_EUR
+};
+
+static const uint32_t PLAYER_GENDER_OFFSETS[4] = {
+    PLAYER_DATA_START + PLAYER_GENDER_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE + PLAYER_GENDER_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 2 + PLAYER_GENDER_OFFSET_EUR,
+    PLAYER_DATA_START + PLAYER_DATA_SIZE * 3 + PLAYER_GENDER_OFFSET_EUR
 };
 
 // Region data
@@ -313,6 +321,19 @@ int SaveFile::getTownId(int player) const {
 
     return static_cast<uint8_t>(m_data[offset]) |
            (static_cast<uint8_t>(m_data[offset + 1]) << 8);
+}
+
+int SaveFile::getPlayerGender(int player) const {
+    if (!m_loaded || player < 0 || player >= PLAYER_COUNT) {
+        return 0;
+    }
+
+    uint32_t offset = PLAYER_GENDER_OFFSETS[player];
+    if (offset >= static_cast<uint32_t>(m_data.size())) {
+        return 0;
+    }
+
+    return static_cast<uint8_t>(m_data[offset]);  // 0=male, 1=female
 }
 
 Letter SaveFile::getLetter(int player, int storageType, int slot) const {

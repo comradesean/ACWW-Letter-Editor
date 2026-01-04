@@ -67,9 +67,11 @@ ApplicationWindow {
         // Attached item
         property int cleanAttachedItem: 0xFFF1
 
-        // Letter metadata flags (not editable in UI yet)
-        property int cleanReceiverFlags: 0
-        property int cleanSenderFlags: 0
+        // Letter metadata
+        property int cleanRecipientGender: 0
+        property int cleanRecipientRelation: 0
+        property int cleanSenderGender: 0
+        property int cleanSenderRelation: 0
         property int cleanNamePosition: 0
         property int cleanLetterIconFlags: 0
         property int cleanLetterSource: 0
@@ -93,9 +95,11 @@ ApplicationWindow {
             cleanSenderPlayerId = backend.senderPlayerId
             // Attached item
             cleanAttachedItem = backend.attachedItem
-            // Letter metadata flags
-            cleanReceiverFlags = backend.receiverFlags
-            cleanSenderFlags = backend.senderFlags
+            // Letter metadata
+            cleanRecipientGender = backend.recipientGender
+            cleanRecipientRelation = backend.recipientRelation
+            cleanSenderGender = backend.senderGender
+            cleanSenderRelation = backend.senderRelation
             cleanNamePosition = backend.namePosition
             cleanLetterIconFlags = backend.letterIconFlags
             cleanLetterSource = backend.letterSource
@@ -123,9 +127,11 @@ ApplicationWindow {
                 (backend.senderPlayerId !== cleanSenderPlayerId) ||
                 // Attached item
                 (backend.attachedItem !== cleanAttachedItem) ||
-                // Letter metadata flags
-                (backend.receiverFlags !== cleanReceiverFlags) ||
-                (backend.senderFlags !== cleanSenderFlags) ||
+                // Letter metadata
+                (backend.recipientGender !== cleanRecipientGender) ||
+                (backend.recipientRelation !== cleanRecipientRelation) ||
+                (backend.senderGender !== cleanSenderGender) ||
+                (backend.senderRelation !== cleanSenderRelation) ||
                 (backend.namePosition !== cleanNamePosition) ||
                 (backend.letterIconFlags !== cleanLetterIconFlags) ||
                 (backend.letterSource !== cleanLetterSource)
@@ -209,6 +215,43 @@ ApplicationWindow {
                 paperCombo.currentIndex = 0
                 dirtyState.capture()
             }
+        }
+        function onUnknownByteWarning(message) {
+            warningToast.text = message
+            warningToast.open()
+        }
+    }
+
+    // Warning toast notification
+    Popup {
+        id: warningToast
+        property string text: ""
+        x: (parent.width - width) / 2
+        y: parent.height - height - 40
+        width: Math.min(toastText.implicitWidth + 32, parent.width - 40)
+        height: 36
+        modal: false
+        closePolicy: Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            color: warningColor
+            radius: 6
+        }
+
+        contentItem: Text {
+            id: toastText
+            text: warningToast.text
+            color: "#FFFFFF"
+            font.pixelSize: 11
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+        }
+
+        // Auto-close after 5 seconds
+        Timer {
+            running: warningToast.visible
+            interval: 5000
+            onTriggered: warningToast.close()
         }
     }
 
@@ -572,12 +615,14 @@ ApplicationWindow {
                                                         backend.recipientTownId = 0
                                                         backend.recipientNameStart = -1
                                                         backend.recipientNameEnd = -1
-                                                        backend.receiverFlags = 0
+                                                        backend.recipientGender = 0
+                                                        backend.recipientRelation = 0
                                                         backend.senderName = ""
                                                         backend.senderTown = ""
                                                         backend.senderPlayerId = 0
                                                         backend.senderTownId = 0
-                                                        backend.senderFlags = 0
+                                                        backend.senderGender = 0
+                                                        backend.senderRelation = 0
                                                         backend.letterSource = 0
                                                         backend.letterIconFlags = 0
                                                         backend.namePosition = 0  // TODO: verify 0 is the correct default
@@ -1754,6 +1799,280 @@ ApplicationWindow {
                                     color: bgHover; radius: 4
                                     border.color: senderTownIdField.activeFocus ? accentPrimary : divider
                                     border.width: 1
+                                }
+                            }
+                        }
+                    }
+
+                    // Row 4: Flag + Gender
+                    Row {
+                        spacing: 8
+                        width: parent.width
+
+                        Column {
+                            width: (parent.width - 8) / 2
+                            spacing: 3
+                            Text { text: "Flag"; font.pixelSize: 10; color: textMuted }
+                            ComboBox {
+                                id: recipientRelationCombo
+                                visible: letterInfoDialog.selectedTab === 0
+                                width: parent.width
+                                font.pixelSize: 11
+                                topPadding: 0; bottomPadding: 0
+                                topInset: 0; bottomInset: 0
+                                model: ListModel {
+                                    ListElement { text: "Future Self"; value: 1 }
+                                    ListElement { text: "Player"; value: 2 }
+                                    ListElement { text: "Villager"; value: 3 }
+                                    ListElement { text: "Green Letter"; value: 5 }
+                                    ListElement { text: "Bottle (Sys)"; value: 6 }
+                                    ListElement { text: "Bottle (Vlgr)"; value: 7 }
+                                }
+                                textRole: "text"
+                                currentIndex: recipientRelationCombo.findIndex(backend.recipientRelation)
+                                onActivated: backend.recipientRelation = model.get(currentIndex).value
+                                onCurrentIndexChanged: {
+                                    // Force gender to male (0) when not Future Self or Player
+                                    var val = model.get(currentIndex).value
+                                    if (val !== 1 && val !== 2) {
+                                        backend.recipientGender = 0
+                                    }
+                                }
+                                function findIndex(val) {
+                                    for (var i = 0; i < model.count; i++) {
+                                        if (model.get(i).value === val) return i
+                                    }
+                                    return -1
+                                }
+                                background: Rectangle {
+                                    implicitHeight: 28
+                                    color: bgHover; radius: 4
+                                    border.color: recipientRelationCombo.activeFocus ? accentPrimary : divider
+                                    border.width: 1
+                                }
+                                contentItem: Text {
+                                    leftPadding: 8
+                                    text: recipientRelationCombo.displayText
+                                    font.pixelSize: 11
+                                    color: textPrimary
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                delegate: ItemDelegate {
+                                    width: recipientRelationCombo.width
+                                    height: 24
+                                    contentItem: Text {
+                                        text: model.text
+                                        font.pixelSize: 11
+                                        color: textPrimary
+                                        verticalAlignment: Text.AlignVCenter
+                                        leftPadding: 4
+                                    }
+                                    background: Rectangle {
+                                        color: highlighted ? bgHover : "transparent"
+                                    }
+                                    highlighted: recipientRelationCombo.highlightedIndex === index
+                                }
+                                popup: Popup {
+                                    y: recipientRelationCombo.height
+                                    width: recipientRelationCombo.width
+                                    implicitHeight: contentItem.implicitHeight + 8
+                                    padding: 4
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: contentHeight
+                                        model: recipientRelationCombo.popup.visible ? recipientRelationCombo.delegateModel : null
+                                        currentIndex: recipientRelationCombo.highlightedIndex
+                                    }
+                                    background: Rectangle {
+                                        color: bgElevated
+                                        border.color: divider
+                                        border.width: 1
+                                        radius: 4
+                                    }
+                                }
+                            }
+                            ComboBox {
+                                id: senderRelationCombo
+                                visible: letterInfoDialog.selectedTab === 1
+                                width: parent.width
+                                font.pixelSize: 11
+                                topPadding: 0; bottomPadding: 0
+                                topInset: 0; bottomInset: 0
+                                model: ListModel {
+                                    ListElement { text: "Player/WFC"; value: 2 }
+                                    ListElement { text: "Villager"; value: 3 }
+                                    ListElement { text: "System"; value: 4 }
+                                }
+                                onCurrentIndexChanged: {
+                                    // Force gender to male (0) when not Player/WFC
+                                    if (model.get(currentIndex).value !== 2) {
+                                        backend.senderGender = 0
+                                    }
+                                }
+                                textRole: "text"
+                                currentIndex: senderRelationCombo.findIndex(backend.senderRelation)
+                                onActivated: backend.senderRelation = model.get(currentIndex).value
+                                function findIndex(val) {
+                                    for (var i = 0; i < model.count; i++) {
+                                        if (model.get(i).value === val) return i
+                                    }
+                                    return -1
+                                }
+                                background: Rectangle {
+                                    implicitHeight: 28
+                                    color: bgHover; radius: 4
+                                    border.color: senderRelationCombo.activeFocus ? accentPrimary : divider
+                                    border.width: 1
+                                }
+                                contentItem: Text {
+                                    leftPadding: 8
+                                    text: senderRelationCombo.displayText
+                                    font.pixelSize: 11
+                                    color: textPrimary
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                delegate: ItemDelegate {
+                                    width: senderRelationCombo.width
+                                    height: 24
+                                    contentItem: Text {
+                                        text: model.text
+                                        font.pixelSize: 11
+                                        color: textPrimary
+                                        verticalAlignment: Text.AlignVCenter
+                                        leftPadding: 4
+                                    }
+                                    background: Rectangle {
+                                        color: highlighted ? bgHover : "transparent"
+                                    }
+                                    highlighted: senderRelationCombo.highlightedIndex === index
+                                }
+                                popup: Popup {
+                                    y: senderRelationCombo.height
+                                    width: senderRelationCombo.width
+                                    implicitHeight: contentItem.implicitHeight + 8
+                                    padding: 4
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: contentHeight
+                                        model: senderRelationCombo.popup.visible ? senderRelationCombo.delegateModel : null
+                                        currentIndex: senderRelationCombo.highlightedIndex
+                                    }
+                                    background: Rectangle {
+                                        color: bgElevated
+                                        border.color: divider
+                                        border.width: 1
+                                        radius: 4
+                                    }
+                                }
+                            }
+                        }
+
+                        Column {
+                            width: (parent.width - 8) / 2
+                            spacing: 3
+                            Text { text: "Gender"; font.pixelSize: 10; color: textMuted }
+                            // Recipient gender (visible on To tab)
+                            Row {
+                                visible: letterInfoDialog.selectedTab === 0
+                                height: 28
+                                spacing: 12
+                                enabled: backend.recipientRelation === 1 || backend.recipientRelation === 2  // Only enabled for Future Self or Player
+                                opacity: enabled ? 1.0 : 0.4
+                                Row {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+                                    Rectangle {
+                                        width: 14; height: 14; radius: 7
+                                        color: "transparent"
+                                        border.color: backend.recipientGender === 0 ? accentPrimary : textMuted
+                                        border.width: 1
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 8; height: 8; radius: 4
+                                            color: accentPrimary
+                                            visible: backend.recipientGender === 0
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: parent.parent.parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: if (parent.parent.parent.enabled) backend.recipientGender = 0
+                                        }
+                                    }
+                                    Text { text: "♂"; font.pixelSize: 12; color: textPrimary; anchors.verticalCenter: parent.verticalCenter }
+                                }
+                                Row {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+                                    Rectangle {
+                                        width: 14; height: 14; radius: 7
+                                        color: "transparent"
+                                        border.color: backend.recipientGender === 1 ? accentPrimary : textMuted
+                                        border.width: 1
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 8; height: 8; radius: 4
+                                            color: accentPrimary
+                                            visible: backend.recipientGender === 1
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: parent.parent.parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: if (parent.parent.parent.enabled) backend.recipientGender = 1
+                                        }
+                                    }
+                                    Text { text: "♀"; font.pixelSize: 12; color: textPrimary; anchors.verticalCenter: parent.verticalCenter }
+                                }
+                            }
+                            // Sender gender (visible on From tab)
+                            Row {
+                                visible: letterInfoDialog.selectedTab === 1
+                                height: 28
+                                spacing: 12
+                                enabled: backend.senderRelation === 2  // Only enabled for Player/WFC
+                                opacity: enabled ? 1.0 : 0.4
+                                Row {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+                                    Rectangle {
+                                        width: 14; height: 14; radius: 7
+                                        color: "transparent"
+                                        border.color: backend.senderGender === 0 ? accentPrimary : textMuted
+                                        border.width: 1
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 8; height: 8; radius: 4
+                                            color: accentPrimary
+                                            visible: backend.senderGender === 0
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: parent.parent.parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: if (parent.parent.parent.enabled) backend.senderGender = 0
+                                        }
+                                    }
+                                    Text { text: "♂"; font.pixelSize: 12; color: textPrimary; anchors.verticalCenter: parent.verticalCenter }
+                                }
+                                Row {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+                                    Rectangle {
+                                        width: 14; height: 14; radius: 7
+                                        color: "transparent"
+                                        border.color: backend.senderGender === 1 ? accentPrimary : textMuted
+                                        border.width: 1
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 8; height: 8; radius: 4
+                                            color: accentPrimary
+                                            visible: backend.senderGender === 1
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: parent.parent.parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: if (parent.parent.parent.enabled) backend.senderGender = 1
+                                        }
+                                    }
+                                    Text { text: "♀"; font.pixelSize: 12; color: textPrimary; anchors.verticalCenter: parent.verticalCenter }
                                 }
                             }
                         }

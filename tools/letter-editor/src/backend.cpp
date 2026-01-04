@@ -251,19 +251,37 @@ void Backend::setAttachedItem(int item) {
     }
 }
 
-void Backend::setReceiverFlags(int flags) {
-    uint32_t newFlags = static_cast<uint32_t>(flags);
-    if (newFlags != m_receiverFlags) {
-        m_receiverFlags = newFlags;
+void Backend::setRecipientGender(int gender) {
+    uint8_t newGender = static_cast<uint8_t>(gender & 0x01);
+    if (newGender != m_recipientGender) {
+        m_recipientGender = newGender;
         writeRecipientToData();  // Sync to m_letterData
         emit letterMetadataChanged();
     }
 }
 
-void Backend::setSenderFlags(int flags) {
-    uint32_t newFlags = static_cast<uint32_t>(flags);
-    if (newFlags != m_senderFlags) {
-        m_senderFlags = newFlags;
+void Backend::setRecipientRelation(int relation) {
+    uint8_t newRelation = static_cast<uint8_t>(relation & 0xFF);
+    if (newRelation != m_recipientRelation) {
+        m_recipientRelation = newRelation;
+        writeRecipientToData();  // Sync to m_letterData
+        emit letterMetadataChanged();
+    }
+}
+
+void Backend::setSenderGender(int gender) {
+    uint8_t newGender = static_cast<uint8_t>(gender & 0x01);
+    if (newGender != m_senderGender) {
+        m_senderGender = newGender;
+        writeSenderToData();  // Sync to m_letterData
+        emit letterMetadataChanged();
+    }
+}
+
+void Backend::setSenderRelation(int relation) {
+    uint8_t newRelation = static_cast<uint8_t>(relation & 0xFF);
+    if (newRelation != m_senderRelation) {
+        m_senderRelation = newRelation;
         writeSenderToData();  // Sync to m_letterData
         emit letterMetadataChanged();
     }
@@ -734,6 +752,7 @@ void Backend::loadCurrentSlot() {
     emit currentPaperChanged();
     emit paperChanged();
     emit attachedItemChanged();
+    emit letterMetadataChanged();
 
     qDebug() << "Backend::loadCurrentSlot: Loaded player" << m_currentPlayer
              << "storage" << m_currentStorageType << "slot" << m_currentSlot;
@@ -786,8 +805,14 @@ void Backend::clearLetter() {
     m_currentPaper = 0;
 
     // Reset metadata fields to defaults
-    m_receiverFlags = 0;
-    m_senderFlags = 0;
+    m_recipientGender = 0;
+    m_recipientUnknown1 = 0;
+    m_recipientRelation = 0;
+    m_recipientUnknown2 = 0;
+    m_senderGender = 0;
+    m_senderUnknown1 = 0;
+    m_senderRelation = 0;
+    m_senderUnknown2 = 0;
     m_namePosition = 0;
     m_letterIconFlags = 0;
     m_letterSource = 0;
@@ -817,6 +842,10 @@ void Backend::importAddresseeFromSave() {
     m_recipientPlayerId = m_saveFile.getPlayerId(m_currentPlayer);
     m_recipientTownId = m_saveFile.getTownId(m_currentPlayer);
 
+    // Set recipient flag to Player (2) and import gender from save
+    m_recipientRelation = 2;  // Player
+    m_recipientGender = m_saveFile.getPlayerGender(m_currentPlayer);  // 0=male, 1=female
+
     // Update recipient name - the name is visual only, not stored in header text
     // The canvas renders the name at namePosition during paint
     m_recipientName = newName;
@@ -836,10 +865,12 @@ void Backend::importAddresseeFromSave() {
 
     emit recipientInfoChanged();
     emit recipientNamePositionChanged();
+    emit letterMetadataChanged();
 
     qDebug() << "Backend::importAddresseeFromSave: Imported"
              << m_recipientName << "from" << m_recipientTown
-             << "(Player ID:" << m_recipientPlayerId << ", Town ID:" << m_recipientTownId << ")";
+             << "(Player ID:" << m_recipientPlayerId << ", Town ID:" << m_recipientTownId
+             << ", Gender:" << m_recipientGender << ")";
 }
 
 bool Backend::playerExists(int player) const {
@@ -1078,11 +1109,11 @@ void Backend::writeRecipientToData() {
         m_letterData[LTR_TO_NAME_OFFSET + i] = nameEncoded[i];
     }
 
-    // Receiver flags
-    m_letterData[LTR_RECEIVER_FLAGS_OFFSET] = static_cast<char>(m_receiverFlags & 0xFF);
-    m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 1] = static_cast<char>((m_receiverFlags >> 8) & 0xFF);
-    m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 2] = static_cast<char>((m_receiverFlags >> 16) & 0xFF);
-    m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 3] = static_cast<char>((m_receiverFlags >> 24) & 0xFF);
+    // Recipient metadata (individual bytes)
+    m_letterData[LTR_RECEIVER_FLAGS_OFFSET] = static_cast<char>(m_recipientGender);
+    m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 1] = static_cast<char>(m_recipientUnknown1);  // Preserve unknown
+    m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 2] = static_cast<char>(m_recipientRelation);
+    m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 3] = static_cast<char>(m_recipientUnknown2);  // Preserve unknown
 }
 
 void Backend::writeSenderToData() {
@@ -1108,11 +1139,11 @@ void Backend::writeSenderToData() {
         m_letterData[LTR_FROM_NAME_OFFSET + i] = nameEncoded[i];
     }
 
-    // Sender flags
-    m_letterData[LTR_SENDER_FLAGS_OFFSET] = static_cast<char>(m_senderFlags & 0xFF);
-    m_letterData[LTR_SENDER_FLAGS_OFFSET + 1] = static_cast<char>((m_senderFlags >> 8) & 0xFF);
-    m_letterData[LTR_SENDER_FLAGS_OFFSET + 2] = static_cast<char>((m_senderFlags >> 16) & 0xFF);
-    m_letterData[LTR_SENDER_FLAGS_OFFSET + 3] = static_cast<char>((m_senderFlags >> 24) & 0xFF);
+    // Sender metadata (individual bytes)
+    m_letterData[LTR_SENDER_FLAGS_OFFSET] = static_cast<char>(m_senderGender);
+    m_letterData[LTR_SENDER_FLAGS_OFFSET + 1] = static_cast<char>(m_senderUnknown1);  // Preserve unknown
+    m_letterData[LTR_SENDER_FLAGS_OFFSET + 2] = static_cast<char>(m_senderRelation);
+    m_letterData[LTR_SENDER_FLAGS_OFFSET + 3] = static_cast<char>(m_senderUnknown2);  // Preserve unknown
 }
 
 void Backend::writeMetadataToData() {
@@ -1172,15 +1203,57 @@ void Backend::syncUIFromLetterData() {
                        (static_cast<uint8_t>(m_letterData[LTR_FROM_PLAYER_ID_OFFSET + 1]) << 8);
     m_senderName = decodeAcwwText(m_letterData.mid(LTR_FROM_NAME_OFFSET, 8));
 
-    // Decode flags
-    m_receiverFlags = static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET]) |
-                      (static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 1]) << 8) |
-                      (static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 2]) << 16) |
-                      (static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 3]) << 24);
-    m_senderFlags = static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET]) |
-                    (static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 1]) << 8) |
-                    (static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 2]) << 16) |
-                    (static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 3]) << 24);
+    // Decode recipient metadata (individual bytes)
+    m_recipientGender = static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET]);
+    m_recipientUnknown1 = static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 1]);
+    m_recipientRelation = static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 2]);
+    m_recipientUnknown2 = static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 3]);
+
+    // Decode sender metadata (individual bytes)
+    m_senderGender = static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET]);
+    m_senderUnknown1 = static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 1]);
+    m_senderRelation = static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 2]);
+    m_senderUnknown2 = static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 3]);
+
+    // Warn if unknown bytes have unexpected values
+    QString reportMsg = " - Please export this letter and report to GitHub with a summary of the letter's origin.";
+    if (m_recipientUnknown1 != 0) {
+        emit unknownByteWarning(QString("Recipient Unknown1 (0x19) has unexpected value: 0x%1%2").arg(m_recipientUnknown1, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+    }
+    if (m_recipientUnknown2 != 0) {
+        emit unknownByteWarning(QString("Recipient Unknown2 (0x1B) has unexpected value: 0x%1%2").arg(m_recipientUnknown2, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+    }
+    if (m_senderUnknown1 != 0) {
+        emit unknownByteWarning(QString("Sender Unknown1 (0x31) has unexpected value: 0x%1%2").arg(m_senderUnknown1, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+    }
+    if (m_senderUnknown2 != 0) {
+        emit unknownByteWarning(QString("Sender Unknown2 (0x33) has unexpected value: 0x%1%2").arg(m_senderUnknown2, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+    }
+
+    // Check for unknown flag values not in our dropdowns
+    // Recipient: known values are 1 (Future Self), 2 (Player), 3 (Villager), 5 (Green Letter), 6 (Bottle Sys), 7 (Bottle Vlgr)
+    if (m_recipientRelation != 1 && m_recipientRelation != 2 && m_recipientRelation != 3 &&
+        m_recipientRelation != 5 && m_recipientRelation != 6 && m_recipientRelation != 7) {
+        emit unknownByteWarning(QString("Unknown Recipient Flag value: 0x%1%2")
+            .arg(m_recipientRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+    }
+    // Sender: known values are 2 (Player/WFC), 3 (Villager), 4 (System)
+    if (m_senderRelation != 2 && m_senderRelation != 3 && m_senderRelation != 4) {
+        emit unknownByteWarning(QString("Unknown Sender Flag value: 0x%1%2")
+            .arg(m_senderRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+    }
+
+    // Check for unexpected gender/flag combinations
+    // Recipient: female (0x01) should only occur with Future Self (0x01) or Player (0x02)
+    if (m_recipientGender == 1 && m_recipientRelation != 1 && m_recipientRelation != 2) {
+        emit unknownByteWarning(QString("Unexpected combination: Recipient Gender is Female (0x01) with Flag 0x%1%2")
+            .arg(m_recipientRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+    }
+    // Sender: female (0x01) should only occur with Player/WFC (0x02)
+    if (m_senderGender == 1 && m_senderRelation != 2) {
+        emit unknownByteWarning(QString("Unexpected combination: Sender Gender is Female (0x01) with Flag 0x%1%2")
+            .arg(m_senderRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+    }
 
     // Decode letter content - greeting is the raw template WITHOUT name inserted
     QString greeting = decodeAcwwText(m_letterData.mid(LTR_SUBJECT_OFFSET, LTR_SUBJECT_SIZE));
