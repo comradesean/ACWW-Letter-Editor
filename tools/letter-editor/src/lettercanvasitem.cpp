@@ -934,9 +934,37 @@ void LetterCanvasItem::charPosFromPoint(qreal x, qreal y, int& outSection, int& 
         int footerLeft = FOOTER_RIGHT - footerWidth;
         outPosInSection = findCharPosAtX(m_footer, localX, footerLeft, font);
     } else {
-        // Default to header
-        outSection = 0;
-        outPosInSection = 0;
+        // Click outside text regions - find nearest section by Y distance
+        int headerCenter = HEADER_TOP + LINE_HEIGHT / 2;
+        int bodyCenter = BODY_TOP + (BODY_LINES * LINE_HEIGHT) / 2;
+        int footerCenter = FOOTER_TOP + LINE_HEIGHT / 2;
+
+        int distToHeader = qAbs(localY - headerCenter);
+        int distToBody = qAbs(localY - bodyCenter);
+        int distToFooter = qAbs(localY - footerCenter);
+
+        if (distToHeader <= distToBody && distToHeader <= distToFooter) {
+            // Nearest to header
+            outSection = 0;
+            QVector<VisualGlyph> glyphs = buildHeaderVisualGlyphs();
+            outPosInSection = glyphs.size();  // End of header
+        } else if (distToBody <= distToFooter) {
+            // Nearest to body - place at end of last line if below body, start of first if above
+            outSection = 1;
+            if (localY > BODY_TOP + BODY_LINES * LINE_HEIGHT) {
+                outPosInSection = m_body.length();  // End of body
+            } else {
+                outPosInSection = 0;  // Start of body
+            }
+        } else {
+            // Nearest to footer
+            outSection = 2;
+            if (localY > FOOTER_TOP + LINE_HEIGHT) {
+                outPosInSection = m_footer.length();  // End of footer
+            } else {
+                outPosInSection = 0;  // Start of footer
+            }
+        }
     }
 }
 
