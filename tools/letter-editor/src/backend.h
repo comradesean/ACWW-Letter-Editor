@@ -48,9 +48,15 @@ class Backend : public QObject {
     // Attached item
     Q_PROPERTY(int attachedItem READ attachedItem WRITE setAttachedItem NOTIFY attachedItemChanged)
 
-    // Letter metadata flags (stored in letter structure, not editable in UI yet)
-    Q_PROPERTY(int receiverFlags READ receiverFlags WRITE setReceiverFlags NOTIFY letterMetadataChanged)
-    Q_PROPERTY(int senderFlags READ senderFlags WRITE setSenderFlags NOTIFY letterMetadataChanged)
+    // Recipient metadata (individual bytes from 0x18-0x1B)
+    Q_PROPERTY(int recipientGender READ recipientGender WRITE setRecipientGender NOTIFY letterMetadataChanged)
+    Q_PROPERTY(int recipientRelation READ recipientRelation WRITE setRecipientRelation NOTIFY letterMetadataChanged)
+
+    // Sender metadata (individual bytes from 0x30-0x33)
+    Q_PROPERTY(int senderGender READ senderGender WRITE setSenderGender NOTIFY letterMetadataChanged)
+    Q_PROPERTY(int senderRelation READ senderRelation WRITE setSenderRelation NOTIFY letterMetadataChanged)
+
+    // Other letter metadata
     Q_PROPERTY(int namePosition READ namePosition WRITE setNamePosition NOTIFY letterMetadataChanged)
     Q_PROPERTY(int letterIconFlags READ letterIconFlags WRITE setLetterIconFlags NOTIFY letterMetadataChanged)
     Q_PROPERTY(int letterSource READ letterSource WRITE setLetterSource NOTIFY letterMetadataChanged)
@@ -102,8 +108,10 @@ public:
     int senderTownId() const { return m_senderTownId; }
     int senderPlayerId() const { return m_senderPlayerId; }
     int attachedItem() const { return m_attachedItem; }
-    int receiverFlags() const { return m_receiverFlags; }
-    int senderFlags() const { return m_senderFlags; }
+    int recipientGender() const { return m_recipientGender; }
+    int recipientRelation() const { return m_recipientRelation; }
+    int senderGender() const { return m_senderGender; }
+    int senderRelation() const { return m_senderRelation; }
     int namePosition() const { return m_namePosition; }
     int letterIconFlags() const { return m_letterIconFlags; }
     int letterSource() const { return m_letterSource; }
@@ -144,8 +152,10 @@ public:
     void setSenderTownId(int id);
     void setSenderPlayerId(int id);
     void setAttachedItem(int item);
-    void setReceiverFlags(int flags);
-    void setSenderFlags(int flags);
+    void setRecipientGender(int gender);
+    void setRecipientRelation(int relation);
+    void setSenderGender(int gender);
+    void setSenderRelation(int relation);
     void setNamePosition(int pos);
     void setLetterIconFlags(int flags);
     void setLetterSource(int source);
@@ -205,6 +215,9 @@ signals:
     void paperChanged();
     void recipientNamePositionChanged();
 
+    // Warnings
+    void unknownByteWarning(const QString& message);
+
     // Save File State
     void saveLoadedChanged();
     void saveModifiedChanged();
@@ -242,9 +255,17 @@ private:
     int m_senderPlayerId = 0;
     // Attached item
     uint16_t m_attachedItem = 0xFFF1;  // 0xFFF1 = no item
-    // Letter metadata flags
-    uint32_t m_receiverFlags = 0;
-    uint32_t m_senderFlags = 0;
+    // Recipient metadata (bytes 0x18-0x1B)
+    uint8_t m_recipientGender = 0;     // 0x18: 0=male, 1=female
+    uint8_t m_recipientUnknown1 = 0;   // 0x19: always 0x00
+    uint8_t m_recipientRelation = 0;   // 0x1A: relation type
+    uint8_t m_recipientUnknown2 = 0;   // 0x1B: always 0x00
+    // Sender metadata (bytes 0x30-0x33)
+    uint8_t m_senderGender = 0;        // 0x30: 0=male, 1=female
+    uint8_t m_senderUnknown1 = 0;      // 0x31: always 0x00
+    uint8_t m_senderRelation = 0;      // 0x32: relation type
+    uint8_t m_senderUnknown2 = 0;      // 0x33: always 0x00
+    // Other letter metadata
     uint8_t m_namePosition = 0;        // Raw intro index for greeting
     uint8_t m_letterIconFlags = 0;     // Letter icon/flags
     uint8_t m_letterSource = 0;        // Letter source type

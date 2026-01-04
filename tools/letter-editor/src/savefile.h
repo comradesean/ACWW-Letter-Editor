@@ -58,6 +58,7 @@ public:
     Q_INVOKABLE QString getPlayerTown(int player) const;
     Q_INVOKABLE int getPlayerId(int player) const;
     Q_INVOKABLE int getTownId(int player) const;
+    Q_INVOKABLE int getPlayerGender(int player) const;  // 0=male, 1=female
     Q_INVOKABLE bool playerExists(int player) const;
     Q_INVOKABLE QStringList getPlayerNames() const;
 
