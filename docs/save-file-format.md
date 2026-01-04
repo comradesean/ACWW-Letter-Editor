@@ -49,12 +49,18 @@ Each letter occupies exactly **244 bytes (`0xF4`)**, structured as follows:
 | `0x06-0x0D` | 8 bytes | Recipient Town Name | ACWW-encoded town name |
 | `0x0E-0x0F` | 2 bytes | Recipient Player ID | Unique identifier for recipient |
 | `0x10-0x17` | 8 bytes | Recipient Player Name | ACWW-encoded player name |
-| `0x18-0x1B` | 4 bytes | Receiver Type Flags | See [Receiver Type Flags](#receiver-type-flags) |
+| `0x18` | 1 byte | Recipient Gender | `0x00` = male, `0x01` = female |
+| `0x19` | 1 byte | Recipient Unknown 1 | Always `0x00` (no other values observed) |
+| `0x1A` | 1 byte | Recipient Relation | See [Recipient Relation](#recipient-relation) |
+| `0x1B` | 1 byte | Recipient Unknown 2 | Always `0x00` (no other values observed) |
 | `0x1C-0x1D` | 2 bytes | Sender Town ID | Unique identifier for sender's town |
 | `0x1E-0x25` | 8 bytes | Sender Town Name | ACWW-encoded town name |
 | `0x26-0x27` | 2 bytes | Sender Player ID | Unique identifier for sender |
 | `0x28-0x2F` | 8 bytes | Sender Player Name | ACWW-encoded player name |
-| `0x30-0x33` | 4 bytes | Sender Type Flags | See [Sender Type Flags](#sender-type-flags) |
+| `0x30` | 1 byte | Sender Gender | `0x00` = male, `0x01` = female |
+| `0x31` | 1 byte | Sender Unknown 1 | Always `0x00` (no other values observed) |
+| `0x32` | 1 byte | Sender Relation | See [Sender Relation](#sender-relation) |
+| `0x33` | 1 byte | Sender Unknown 2 | Always `0x00` (no other values observed) |
 | `0x34-0x4B` | 24 bytes (`0x18`) | Greeting | Subject/greeting line |
 | `0x4C-0xCB` | 128 bytes (`0x80`) | Body | Main letter content |
 | `0xCC-0xEB` | 32 bytes (`0x20`) | Signature | Letter closing/signature |
@@ -79,28 +85,30 @@ Each letter occupies exactly **244 bytes (`0xF4`)**, structured as follows:
 
 ---
 
-### Receiver Type Flags
+### Recipient Relation
 
-Located at offset `0x18-0x1B` (4 bytes).
+Located at offset `0x1A` (1 byte).
 
-| Hex Value | Meaning |
-|-----------|---------|
-| `00 00 03 00` | Written letter (not sent) |
-| `00 00 06 00` | Bottled mail (received) |
-| `01 00 02 00` | Valentine's Day letter (untouched) |
-| `00 00 02 00` | All other letters |
+| Value | Meaning |
+|-------|---------|
+| `0x01` | Recipient is Future Self |
+| `0x02` | Recipient is Player |
+| `0x03` | Recipient is Villager |
+| `0x05` | Green Letter Delivery (cross-town villager favor) |
+| `0x06` | Bottled Mail (Hayseed Hilda, Animal Crossing Team) |
+| `0x07` | Bottled Mail from Villager (e.g., Katrina) |
 
 ---
 
-### Sender Type Flags
+### Sender Relation
 
-Located at offset `0x30-0x33` (4 bytes).
+Located at offset `0x32` (1 byte).
 
-| Hex Value | Meaning |
-|-----------|---------|
-| `00 00 04 00` | Bottle mail |
-| `01 00 02 00` | Tortimer President letter |
-| `00 00 02 00` | All other letters |
+| Value | Meaning |
+|-------|---------|
+| `0x02` | Player, S. Iwata, Nintendo (Valentines), Tortimer (Female), Katrina bottle mail |
+| `0x03` | Villager letters (no gender) |
+| `0x04` | Redd, HRA, Post Office, Blathers, Nook Points, Hayseed Hilda, Mom (no gender) |
 
 ---
 
