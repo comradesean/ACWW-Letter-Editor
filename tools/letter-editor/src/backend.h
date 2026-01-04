@@ -5,6 +5,8 @@
 #include <QImage>
 #include <QUrl>
 #include <QVariantList>
+#include <QVector>
+#include "letterconstants.h"
 #include "stationery_loader.h"
 #include "font_loader.h"
 #include "cloth_loader.h"
@@ -50,8 +52,8 @@ class Backend : public QObject {
     Q_PROPERTY(int receiverFlags READ receiverFlags WRITE setReceiverFlags NOTIFY letterMetadataChanged)
     Q_PROPERTY(int senderFlags READ senderFlags WRITE setSenderFlags NOTIFY letterMetadataChanged)
     Q_PROPERTY(int namePosition READ namePosition WRITE setNamePosition NOTIFY letterMetadataChanged)
-    Q_PROPERTY(int letterStatus READ letterStatus WRITE setLetterStatus NOTIFY letterMetadataChanged)
-    Q_PROPERTY(int letterOrigin READ letterOrigin WRITE setLetterOrigin NOTIFY letterMetadataChanged)
+    Q_PROPERTY(int letterIconFlags READ letterIconFlags WRITE setLetterIconFlags NOTIFY letterMetadataChanged)
+    Q_PROPERTY(int letterSource READ letterSource WRITE setLetterSource NOTIFY letterMetadataChanged)
 
     // ========================================
     // GUI/Display Properties (derived, not stored)
@@ -103,8 +105,8 @@ public:
     int receiverFlags() const { return m_receiverFlags; }
     int senderFlags() const { return m_senderFlags; }
     int namePosition() const { return m_namePosition; }
-    int letterStatus() const { return m_letterStatus; }
-    int letterOrigin() const { return m_letterOrigin; }
+    int letterIconFlags() const { return m_letterIconFlags; }
+    int letterSource() const { return m_letterSource; }
 
     // GUI/Display getters (derived, not stored)
     QString letterHeader() const { return m_letterHeader; }
@@ -145,8 +147,8 @@ public:
     void setReceiverFlags(int flags);
     void setSenderFlags(int flags);
     void setNamePosition(int pos);
-    void setLetterStatus(int status);
-    void setLetterOrigin(int origin);
+    void setLetterIconFlags(int flags);
+    void setLetterSource(int source);
 
     // GUI/Display setters (visual state only)
     void setRecipientNameStart(int pos);
@@ -184,6 +186,9 @@ public:
     const FontLoader& font() const { return m_font; }
     const ClothLoader& cloth() const { return m_cloth; }
 
+    // Build visual glyph list for header (shared between canvas and PNG export)
+    QVector<VisualGlyph> buildHeaderVisualGlyphs(const QString& templateText, int startX = LetterConstants::HEADER_LEFT, int glyphSpacing = LetterConstants::GLYPH_SPACING) const;
+
 signals:
     // ROM/Application State
     void loadedChanged();
@@ -220,6 +225,9 @@ private:
     // ========================================
     // Letter Structure Data (stored in .ltr/save file)
     // ========================================
+    // Canonical letter data - single source of truth (244 bytes)
+    QByteArray m_letterData;
+
     int m_currentPaper = 0;
     QString m_letterText;
     // Recipient info
@@ -238,8 +246,8 @@ private:
     uint32_t m_receiverFlags = 0;
     uint32_t m_senderFlags = 0;
     uint8_t m_namePosition = 0;        // Raw intro index for greeting
-    uint8_t m_letterStatus = 0;        // Letter status flags
-    uint8_t m_letterOrigin = 0;        // Letter origin type
+    uint8_t m_letterIconFlags = 0;     // Letter icon/flags
+    uint8_t m_letterSource = 0;        // Letter source type
 
     // ========================================
     // GUI/Display State (derived, not stored)
@@ -257,4 +265,19 @@ private:
     int m_currentPlayer = 0;
     int m_currentStorageType = 0;      // 0=Inventory, 1=Mailbox, 2=Bank
     int m_currentSlot = 0;
+
+    // ========================================
+    // Letter Data Helpers
+    // ========================================
+    void initLetterData();  // Initialize m_letterData to empty 244-byte buffer
+    void syncLetterDataFromUI();  // Sync all UI state to m_letterData
+    void syncUIFromLetterData();  // Sync all m_letterData to UI state
+
+    // Field-specific writers to m_letterData
+    void writeGreetingToData(const QString& greeting);
+    void writeBodyToData(const QString& body);
+    void writeSignatureToData(const QString& signature);
+    void writeRecipientToData();
+    void writeSenderToData();
+    void writeMetadataToData();
 };

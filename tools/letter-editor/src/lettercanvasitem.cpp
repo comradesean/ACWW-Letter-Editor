@@ -259,26 +259,30 @@ void LetterCanvasItem::insertChar(const QString& ch) {
         QString& section = sectionText(m_currentSection);
 
         if (m_currentSection == 0) {
-            // Header validation
-            int recipientStart = m_backend->recipientNameStart();
-            int recipientEnd = m_backend->recipientNameEnd();
-            int recipientLen = (recipientStart >= 0 && recipientEnd >= 0) ? (recipientEnd - recipientStart) : 0;
+            // Header validation - check template length (name is visual only, not in text)
+            if (m_header.length() >= MAX_HEADER_CHARS) return;
 
-            int headerLenWithoutName = m_header.length() - recipientLen;
-            if (headerLenWithoutName >= MAX_HEADER_CHARS) return;
+            // Build visual glyphs to check cursor position relative to name
+            auto glyphs = buildHeaderVisualGlyphs();
+            int visualPos = m_cursorPosInSection;
 
-            // Check pixel width limit for template (non-name) characters
+            // Check if cursor is WITHIN the name (both adjacent glyphs are name glyphs)
+            bool beforeIsName = (visualPos > 0 && visualPos <= glyphs.size() && glyphs[visualPos - 1].isName);
+            bool afterIsName = (visualPos >= 0 && visualPos < glyphs.size() && glyphs[visualPos].isName);
+
+            if (beforeIsName && afterIsName) {
+                // Cursor is within the name - block insertion
+                return;
+            }
+
+            // Check pixel width limit for template characters
             // Template width must fit in MAX_LINE_WIDTH - NAME_TOKEN_WIDTH
             const int maxTemplateWidth = MAX_LINE_WIDTH - NAME_TOKEN_WIDTH;
             const FontLoader& font = m_backend->font();
             int templateWidth = 0;
 
-            // Calculate current template width (excluding name)
+            // Calculate current template width (m_header is already without name)
             for (int i = 0; i < m_header.length(); i++) {
-                if (recipientStart >= 0 && recipientEnd >= 0 &&
-                    i >= recipientStart && i < recipientEnd) {
-                    continue;
-                }
                 templateWidth += font.charWidth(m_header[i]) + GLYPH_SPACING;
             }
 
@@ -286,21 +290,27 @@ void LetterCanvasItem::insertChar(const QString& ch) {
             int newCharWidth = font.charWidth(insertText[0]) + GLYPH_SPACING;
             if (templateWidth + newCharWidth > maxTemplateWidth) return;
 
-            // Protect recipient name
-            if (recipientStart >= 0 && recipientEnd >= 0 &&
-                m_cursorPosInSection > recipientStart && m_cursorPosInSection < recipientEnd) {
-                return;
-            }
+            // Convert visual cursor position to template position for editing
+            int templatePos = headerVisualToTemplatePos(m_cursorPosInSection);
 
-            int insertPos = m_cursorPosInSection;
-            m_header.insert(m_cursorPosInSection, insertText);
+            m_header.insert(templatePos, insertText);
+
+            // Determine if we're inserting before the name (glyph after is name, before is not)
+            // In that case, increment namePos so the name stays after the inserted char
+            int namePos = m_backend->namePosition();
+            bool insertingBeforeName = afterIsName && !beforeIsName;
+
+            if (insertingBeforeName) {
+                // Inserting before the name - increment namePos
+                m_backend->setNamePosition(namePos + 1);
+            } else if (templatePos < namePos) {
+                // Inserting before namePos in template - shift namePos
+                m_backend->setNamePosition(namePos + 1);
+            }
+            // If inserting after the name (beforeIsName && !afterIsName), namePos stays the same
+
+            // Update visual cursor position to stay after inserted char
             m_cursorPosInSection++;
-
-            // Shift recipient name position if inserted before it
-            if (recipientStart >= 0 && recipientEnd >= 0 && insertPos <= recipientStart) {
-                m_backend->setRecipientNameStart(recipientStart + 1);
-                m_backend->setRecipientNameEnd(recipientEnd + 1);
-            }
         } else if (m_currentSection == 1) {
             // Body validation
             if (m_body.length() >= MAX_BODY_CHARS) return;
@@ -370,28 +380,50 @@ void LetterCanvasItem::insertChar(const QString& ch) {
 
 void LetterCanvasItem::backspace() {
     if (hasSelection()) {
+        // Block deletion if selection visually includes the recipient name
+        if (selectionIncludesName()) {
+            clearSelection();
+            return;
+        }
         deleteSelection();
         return;
     }
 
-    if (m_cursorPosInSection > 0) {
-        // Header protection for recipient name
-        if (m_currentSection == 0 && m_backend) {
-            int recipientStart = m_backend->recipientNameStart();
-            int recipientEnd = m_backend->recipientNameEnd();
-            int deletePos = m_cursorPosInSection - 1;
+    if (m_currentSection == 0) {
+        // Header uses visual cursor positions
+        if (m_cursorPosInSection <= 0) return;
 
-            if (recipientStart >= 0 && recipientEnd >= 0 &&
-                deletePos >= recipientStart && deletePos < recipientEnd) {
-                return;
-            }
+        // Block only if the glyph BEFORE the cursor is a name glyph
+        // (backspace deletes what's before the cursor)
+        auto glyphs = buildHeaderVisualGlyphs();
+        if (m_cursorPosInSection > 0 && m_cursorPosInSection <= glyphs.size() &&
+            glyphs[m_cursorPosInSection - 1].isName) {
+            return;
+        }
 
-            if (recipientStart >= 0 && deletePos < recipientStart) {
-                m_backend->setRecipientNameStart(recipientStart - 1);
-                m_backend->setRecipientNameEnd(recipientEnd - 1);
+        // Convert visual position to template position
+        int templatePos = headerVisualToTemplatePos(m_cursorPosInSection);
+        if (templatePos <= 0) return;
+
+        // Update namePosition if deleting before it
+        if (m_backend) {
+            int namePos = m_backend->namePosition();
+            if (templatePos - 1 < namePos) {
+                int newPos = namePos - 1;
+                newPos = qMax(0, qMin(newPos, m_header.length() - 1));
+                m_backend->setNamePosition(newPos);
             }
         }
 
+        m_header.remove(templatePos - 1, 1);
+        m_cursorPosInSection--;
+
+        m_cursorVisible = true;
+        emit textChanged();
+        emit cursorPositionChanged();
+        update();
+    } else if (m_cursorPosInSection > 0) {
+        // Body/footer use template positions directly
         QString& section = sectionText(m_currentSection);
         section.remove(m_cursorPosInSection - 1, 1);
         m_cursorPosInSection--;
@@ -406,35 +438,59 @@ void LetterCanvasItem::backspace() {
 
 void LetterCanvasItem::deleteChar() {
     if (hasSelection()) {
+        // Block deletion if selection visually includes the recipient name
+        if (selectionIncludesName()) {
+            clearSelection();
+            return;
+        }
         deleteSelection();
         return;
     }
 
-    QString& section = sectionText(m_currentSection);
+    if (m_currentSection == 0) {
+        // Header uses visual cursor positions
+        auto glyphs = buildHeaderVisualGlyphs();
 
-    if (m_cursorPosInSection < section.length()) {
-        // Header protection for recipient name
-        if (m_currentSection == 0 && m_backend) {
-            int recipientStart = m_backend->recipientNameStart();
-            int recipientEnd = m_backend->recipientNameEnd();
+        // Block only if the glyph AFTER the cursor is a name glyph
+        // (delete removes what's after the cursor)
+        if (m_cursorPosInSection >= 0 && m_cursorPosInSection < glyphs.size() &&
+            glyphs[m_cursorPosInSection].isName) {
+            return;
+        }
 
-            if (recipientStart >= 0 && recipientEnd >= 0 &&
-                m_cursorPosInSection >= recipientStart && m_cursorPosInSection < recipientEnd) {
-                return;
-            }
+        // Convert visual position to template position
+        int templatePos = headerVisualToTemplatePos(m_cursorPosInSection);
+        if (templatePos >= m_header.length()) return;
 
-            if (recipientStart >= 0 && m_cursorPosInSection < recipientStart) {
-                m_backend->setRecipientNameStart(recipientStart - 1);
-                m_backend->setRecipientNameEnd(recipientEnd - 1);
+        // Update namePosition if deleting before it
+        if (m_backend) {
+            int namePos = m_backend->namePosition();
+            if (templatePos < namePos) {
+                int newPos = namePos - 1;
+                newPos = qMax(0, qMin(newPos, m_header.length() - 1));
+                m_backend->setNamePosition(newPos);
             }
         }
 
-        section.remove(m_cursorPosInSection, 1);
+        m_header.remove(templatePos, 1);
+        // Visual cursor position stays the same
 
         m_cursorVisible = true;
         emit textChanged();
         emit cursorPositionChanged();
         update();
+    } else {
+        // Body/footer use template positions directly
+        QString& section = sectionText(m_currentSection);
+
+        if (m_cursorPosInSection < section.length()) {
+            section.remove(m_cursorPosInSection, 1);
+
+            m_cursorVisible = true;
+            emit textChanged();
+            emit cursorPositionChanged();
+            update();
+        }
     }
     // At end of section - don't cross boundaries
 }
@@ -452,29 +508,15 @@ void LetterCanvasItem::moveCursorLeft() {
 
     if (m_cursorPosInSection > 0) {
         m_cursorPosInSection--;
-
-        // Skip recipient name in header
-        if (m_currentSection == 0 && m_backend) {
-            int recipientStart = m_backend->recipientNameStart();
-            int recipientEnd = m_backend->recipientNameEnd();
-            if (recipientStart >= 0 && recipientEnd >= 0 &&
-                m_cursorPosInSection > recipientStart &&
-                m_cursorPosInSection < recipientEnd) {
-                m_cursorPosInSection = recipientStart;
-            }
-        }
     } else if (m_currentSection > 0) {
         // Move to previous section
         m_currentSection--;
-        m_cursorPosInSection = sectionText(m_currentSection).length();
-
-        // Skip recipient name at end of header
-        if (m_currentSection == 0 && m_backend) {
-            int recipientEnd = m_backend->recipientNameEnd();
-            int recipientStart = m_backend->recipientNameStart();
-            if (recipientEnd >= 0 && recipientStart >= 0 && m_cursorPosInSection == recipientEnd) {
-                m_cursorPosInSection = recipientStart;
-            }
+        if (m_currentSection == 0) {
+            // Moving to header - use visual glyph count
+            auto glyphs = buildHeaderVisualGlyphs();
+            m_cursorPosInSection = glyphs.size();
+        } else {
+            m_cursorPosInSection = sectionText(m_currentSection).length();
         }
         emit currentSectionChanged();
     }
@@ -495,26 +537,29 @@ void LetterCanvasItem::moveCursorRight() {
         return;
     }
 
-    QString& section = sectionText(m_currentSection);
-
-    if (m_cursorPosInSection < section.length()) {
-        m_cursorPosInSection++;
-
-        // Skip recipient name in header
-        if (m_currentSection == 0 && m_backend) {
-            int recipientStart = m_backend->recipientNameStart();
-            int recipientEnd = m_backend->recipientNameEnd();
-            if (recipientStart >= 0 && recipientEnd >= 0 &&
-                m_cursorPosInSection > recipientStart &&
-                m_cursorPosInSection < recipientEnd) {
-                m_cursorPosInSection = recipientEnd;
-            }
+    if (m_currentSection == 0) {
+        // Header uses visual glyph count
+        auto glyphs = buildHeaderVisualGlyphs();
+        if (m_cursorPosInSection < glyphs.size()) {
+            m_cursorPosInSection++;
+        } else if (m_currentSection < 2) {
+            // Move to next section
+            m_currentSection++;
+            m_cursorPosInSection = 0;
+            emit currentSectionChanged();
         }
-    } else if (m_currentSection < 2) {
-        // Move to next section
-        m_currentSection++;
-        m_cursorPosInSection = 0;
-        emit currentSectionChanged();
+    } else {
+        // Body/footer use template length
+        QString& section = sectionText(m_currentSection);
+
+        if (m_cursorPosInSection < section.length()) {
+            m_cursorPosInSection++;
+        } else if (m_currentSection < 2) {
+            // Move to next section
+            m_currentSection++;
+            m_cursorPosInSection = 0;
+            emit currentSectionChanged();
+        }
     }
 
     m_cursorVisible = true;
@@ -564,17 +609,6 @@ void LetterCanvasItem::moveCursorUp() {
             // Move to header
             m_currentSection = 0;
             m_cursorPosInSection = qMin(posInLine, m_header.length());
-
-            // Skip recipient name
-            if (m_backend) {
-                int recipientStart = m_backend->recipientNameStart();
-                int recipientEnd = m_backend->recipientNameEnd();
-                if (recipientStart >= 0 && recipientEnd >= 0 &&
-                    m_cursorPosInSection > recipientStart &&
-                    m_cursorPosInSection < recipientEnd) {
-                    m_cursorPosInSection = recipientEnd;
-                }
-            }
             emit currentSectionChanged();
         } else {
             // Move to previous line in body
@@ -680,15 +714,9 @@ void LetterCanvasItem::moveCursorEnd() {
             }
         }
     } else if (m_currentSection == 0) {
-        // Header - move to end, but skip recipient name
-        m_cursorPosInSection = m_header.length();
-        if (m_backend) {
-            int recipientEnd = m_backend->recipientNameEnd();
-            int recipientStart = m_backend->recipientNameStart();
-            if (recipientEnd >= 0 && recipientStart >= 0 && m_cursorPosInSection == recipientEnd) {
-                m_cursorPosInSection = recipientStart;
-            }
-        }
+        // Header - move to end (visual glyph count)
+        auto glyphs = buildHeaderVisualGlyphs();
+        m_cursorPosInSection = glyphs.size();
     } else {
         // Footer - move to end
         m_cursorPosInSection = m_footer.length();
@@ -797,29 +825,48 @@ void LetterCanvasItem::setLetterContent(const QString& header, const QString& bo
     update();
 }
 
-int LetterCanvasItem::calculateHeaderWidth(const QString& newRecipientName) const {
-    if (!m_backend || !m_backend->isLoaded()) return 0;
-
-    int recipientStart = m_backend->recipientNameStart();
-    int recipientEnd = m_backend->recipientNameEnd();
-
-    // Calculate template width (excluding name)
-    int templateWidth = 0;
-    const FontLoader& font = m_backend->font();
-    bool hasName = (recipientStart >= 0 && recipientEnd >= 0 && recipientEnd <= m_header.length());
-
-    for (int i = 0; i < m_header.length(); i++) {
-        if (hasName && i >= recipientStart && i < recipientEnd) {
-            continue;
-        }
-        templateWidth += font.charWidth(m_header[i]) + GLYPH_SPACING;
+QVector<VisualGlyph> LetterCanvasItem::buildHeaderVisualGlyphs() const {
+    if (!m_backend || !m_backend->isLoaded()) {
+        return QVector<VisualGlyph>();
     }
-
-    // Return total width: template + reserved name space
-    return templateWidth + NAME_TOKEN_WIDTH;
+    return m_backend->buildHeaderVisualGlyphs(m_header, HEADER_LEFT, GLYPH_SPACING);
 }
 
-void LetterCanvasItem::charPosFromPoint(qreal x, qreal y, int& outSection, int& outPosInSection) const {
+int LetterCanvasItem::headerVisualToTemplatePos(int visualPos) const {
+    if (!m_backend || !m_backend->isLoaded()) return 0;
+
+    auto glyphs = buildHeaderVisualGlyphs();
+    if (glyphs.isEmpty()) return 0;
+
+    // Clamp to valid range
+    if (visualPos <= 0) return 0;
+    if (visualPos >= glyphs.size()) return m_header.length();
+
+    // The glyph at visualPos is what's to the right of the cursor
+    // Return its template position
+    return glyphs[visualPos].templatePos;
+}
+
+int LetterCanvasItem::headerTemplateToVisualPos(int templatePos) const {
+    if (!m_backend || !m_backend->isLoaded()) return 0;
+
+    auto glyphs = buildHeaderVisualGlyphs();
+    if (glyphs.isEmpty()) return 0;
+
+    // Find the first glyph with templatePos >= the target
+    for (int i = 0; i < glyphs.size(); i++) {
+        if (!glyphs[i].isName && glyphs[i].templatePos >= templatePos) {
+            return i;
+        }
+    }
+
+    // Past end
+    return glyphs.size();
+}
+
+void LetterCanvasItem::charPosFromPoint(qreal x, qreal y, int& outSection, int& outPosInSection, bool* outClickedName) const {
+    if (outClickedName) *outClickedName = false;
+
     if (!m_backend || !m_backend->isLoaded()) {
         outSection = 0;
         outPosInSection = 0;
@@ -842,21 +889,30 @@ void LetterCanvasItem::charPosFromPoint(qreal x, qreal y, int& outSection, int& 
 
     // Determine section from Y coordinate
     if (localY >= HEADER_TOP && localY < HEADER_TOP + LINE_HEIGHT) {
-        // Header
+        // Header - use unified visual glyph system
+        // Returns VISUAL position (glyph index), not template position
         outSection = 0;
-        outPosInSection = findCharPosAtX(m_header, localX, HEADER_LEFT, font);
 
-        // Skip recipient name
-        int recipientStart = m_backend->recipientNameStart();
-        int recipientEnd = m_backend->recipientNameEnd();
-        if (recipientStart >= 0 && recipientEnd >= 0 &&
-            outPosInSection > recipientStart && outPosInSection < recipientEnd) {
-            if (outPosInSection - recipientStart < recipientEnd - outPosInSection) {
-                outPosInSection = recipientStart;
-            } else {
-                outPosInSection = recipientEnd;
+        QVector<VisualGlyph> glyphs = buildHeaderVisualGlyphs();
+
+        // Find which glyph was clicked and return visual position
+        for (int i = 0; i < glyphs.size(); i++) {
+            const auto& g = glyphs[i];
+            if (localX >= g.startX && localX < g.endX) {
+                // Signal if clicked on name glyph (for double-click handling)
+                if (g.isName && outClickedName) {
+                    *outClickedName = true;
+                }
+
+                // Return visual position based on left/right half of glyph
+                int midX = (g.startX + g.endX) / 2;
+                outPosInSection = (localX < midX) ? i : i + 1;
+                return;
             }
         }
+
+        // Clicked past end - return visual position at end
+        outPosInSection = glyphs.size();
     } else if (localY >= BODY_TOP && localY < BODY_TOP + BODY_LINES * LINE_HEIGHT) {
         // Body
         outSection = 1;
@@ -888,39 +944,10 @@ void LetterCanvasItem::handleClick(qreal x, qreal y) {
     if (!m_backend || !m_backend->isLoaded()) return;
 
     int newSection, newPosInSection;
-    charPosFromPoint(x, y, newSection, newPosInSection);
+    bool clickedName = false;
+    charPosFromPoint(x, y, newSection, newPosInSection, &clickedName);
 
-    // Check for recipient name click
-    if (newSection == 0 && m_backend) {
-        int recipientStart = m_backend->recipientNameStart();
-        int recipientEnd = m_backend->recipientNameEnd();
-        if (recipientStart >= 0 && recipientEnd >= 0) {
-            qreal scaleX = width() / 256.0;
-            qreal scaleY = height() / 192.0;
-            qreal scale = qMin(scaleX, scaleY);
-            int scaledW = static_cast<int>(256 * scale);
-            int offsetX = (width() - scaledW) / 2;
-            int localX = static_cast<int>((x - offsetX) / scale);
-
-            const FontLoader& font = m_backend->font();
-            int xPos = HEADER_LEFT;
-            for (int i = 0; i < recipientStart && i < m_header.length(); i++) {
-                xPos += font.charWidth(m_header[i]) + GLYPH_SPACING;
-            }
-            // Calculate actual width of recipient name
-            int nameWidth = 0;
-            for (int i = recipientStart; i < recipientEnd && i < m_header.length(); i++) {
-                nameWidth += font.charWidth(m_header[i]) + GLYPH_SPACING;
-            }
-            int nameEndX = xPos + nameWidth;
-
-            if (localX >= xPos && localX <= nameEndX) {
-                emit recipientNameClicked();
-                return;
-            }
-        }
-    }
-
+    // Single click always positions cursor (even on name)
     clearSelection();
     m_currentSection = newSection;
     m_cursorPosInSection = newPosInSection;
@@ -930,21 +957,24 @@ void LetterCanvasItem::handleClick(qreal x, qreal y) {
     update();
 }
 
+void LetterCanvasItem::handleDoubleClick(qreal x, qreal y) {
+    if (!m_backend || !m_backend->isLoaded()) return;
+
+    int section, posInSection;
+    bool clickedName = false;
+    charPosFromPoint(x, y, section, posInSection, &clickedName);
+
+    // Double-click on recipient name opens the editor
+    if (clickedName) {
+        emit recipientNameClicked();
+    }
+}
+
 void LetterCanvasItem::startSelection(qreal x, qreal y) {
     if (!m_backend || !m_backend->isLoaded()) return;
 
     int section, posInSection;
     charPosFromPoint(x, y, section, posInSection);
-
-    // Skip recipient name
-    if (section == 0 && m_backend) {
-        int recipientStart = m_backend->recipientNameStart();
-        int recipientEnd = m_backend->recipientNameEnd();
-        if (recipientStart >= 0 && recipientEnd >= 0 &&
-            posInSection > recipientStart && posInSection < recipientEnd) {
-            return;
-        }
-    }
 
     m_selectionSection = section;
     m_selectionAnchorInSection = posInSection;
@@ -969,26 +999,19 @@ void LetterCanvasItem::updateSelection(qreal x, qreal y) {
 
     // Constrain to same section as anchor
     if (section != m_selectionSection) {
-        const QString& sectionStr = sectionText(m_selectionSection);
+        int maxPos;
+        if (m_selectionSection == 0) {
+            // Header uses visual glyph count
+            auto glyphs = buildHeaderVisualGlyphs();
+            maxPos = glyphs.size();
+        } else {
+            maxPos = sectionText(m_selectionSection).length();
+        }
+
         if (section > m_selectionSection) {
-            posInSection = sectionStr.length();
+            posInSection = maxPos;
         } else {
             posInSection = 0;
-        }
-    }
-
-    // Skip recipient name in header
-    if (m_selectionSection == 0 && m_backend) {
-        int recipientStart = m_backend->recipientNameStart();
-        int recipientEnd = m_backend->recipientNameEnd();
-        if (recipientStart >= 0 && recipientEnd >= 0) {
-            if (posInSection > recipientStart && posInSection < recipientEnd) {
-                if (m_selectionAnchorInSection <= recipientStart) {
-                    posInSection = recipientEnd;
-                } else {
-                    posInSection = recipientStart;
-                }
-            }
         }
     }
 
@@ -1019,34 +1042,88 @@ void LetterCanvasItem::clearSelection() {
     }
 }
 
+bool LetterCanvasItem::selectionIncludesName() const {
+    // Only relevant for header section
+    if (m_currentSection != 0 || !m_backend) return false;
+    if (m_selectionSection != 0) return false;
+    if (m_selectionStartInSection < 0 || m_selectionEndInSection < 0) return false;
+
+    QString recipientName = m_backend->recipientName();
+    if (recipientName.isEmpty()) return false;
+
+    int selStart = qMin(m_selectionStartInSection, m_selectionEndInSection);
+    int selEnd = qMax(m_selectionStartInSection, m_selectionEndInSection);
+
+    // Selection positions are now VISUAL (glyph indices)
+    // Check if any glyph in the selection range is a name glyph
+    auto glyphs = buildHeaderVisualGlyphs();
+    for (int i = selStart; i < selEnd && i < glyphs.size(); i++) {
+        if (glyphs[i].isName) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void LetterCanvasItem::deleteSelection() {
     if (!hasSelection()) return;
 
-    int start = qMin(m_selectionStartInSection, m_selectionEndInSection);
-    int end = qMax(m_selectionStartInSection, m_selectionEndInSection);
-
-    // Handle recipient name protection in header
-    if (m_selectionSection == 0 && m_backend) {
-        int recipientStart = m_backend->recipientNameStart();
-        int recipientEnd = m_backend->recipientNameEnd();
-        if (recipientStart >= 0 && recipientEnd >= 0) {
-            if (start < recipientEnd && end > recipientStart) {
-                clearSelection();
-                return;
-            }
-            if (end <= recipientStart) {
-                int deleteLen = end - start;
-                m_backend->setRecipientNameStart(recipientStart - deleteLen);
-                m_backend->setRecipientNameEnd(recipientEnd - deleteLen);
-            }
-        }
+    // Block deletion if selection visually includes the recipient name
+    if (selectionIncludesName()) {
+        clearSelection();
+        return;
     }
 
-    QString& section = sectionText(m_selectionSection);
-    section.remove(start, end - start);
+    int selStart = qMin(m_selectionStartInSection, m_selectionEndInSection);
+    int selEnd = qMax(m_selectionStartInSection, m_selectionEndInSection);
 
-    m_currentSection = m_selectionSection;
-    m_cursorPosInSection = start;
+    if (m_selectionSection == 0) {
+        // Header uses visual positions - convert to template deletion
+        auto glyphs = buildHeaderVisualGlyphs();
+
+        // Collect template positions to delete (skip name glyphs, which are blocked anyway)
+        QVector<int> templatePosToDelete;
+        for (int i = selStart; i < selEnd && i < glyphs.size(); i++) {
+            if (!glyphs[i].isName) {
+                int tpos = glyphs[i].templatePos;
+                // Avoid duplicates
+                if (templatePosToDelete.isEmpty() || templatePosToDelete.last() != tpos) {
+                    templatePosToDelete.append(tpos);
+                }
+            }
+        }
+
+        if (!templatePosToDelete.isEmpty() && m_backend) {
+            // Delete from end to start to preserve indices
+            int namePos = m_backend->namePosition();
+            int deletedBeforeName = 0;
+
+            for (int i = templatePosToDelete.size() - 1; i >= 0; i--) {
+                int tpos = templatePosToDelete[i];
+                if (tpos < namePos) {
+                    deletedBeforeName++;
+                }
+                m_header.remove(tpos, 1);
+            }
+
+            // Update namePosition
+            if (deletedBeforeName > 0) {
+                int newNamePos = namePos - deletedBeforeName;
+                m_backend->setNamePosition(qMax(0, newNamePos));
+            }
+        }
+
+        m_currentSection = m_selectionSection;
+        m_cursorPosInSection = selStart;  // Visual position
+    } else {
+        // Body/footer use template positions directly
+        QString& section = sectionText(m_selectionSection);
+        section.remove(selStart, selEnd - selStart);
+
+        m_currentSection = m_selectionSection;
+        m_cursorPosInSection = selStart;
+    }
+
     clearSelection();
 
     m_cursorVisible = true;
@@ -1059,13 +1136,20 @@ void LetterCanvasItem::deleteSelection() {
 void LetterCanvasItem::selectAll() {
     if (!m_backend || !m_backend->isLoaded()) return;
 
-    const QString& section = sectionText(m_currentSection);
+    int endPos;
+    if (m_currentSection == 0) {
+        // Header uses visual glyph count
+        auto glyphs = buildHeaderVisualGlyphs();
+        endPos = glyphs.size();
+    } else {
+        endPos = sectionText(m_currentSection).length();
+    }
 
     m_selectionSection = m_currentSection;
     m_selectionAnchorInSection = 0;
     m_selectionStartInSection = 0;
-    m_selectionEndInSection = section.length();
-    m_cursorPosInSection = section.length();
+    m_selectionEndInSection = endPos;
+    m_cursorPosInSection = endPos;
 
     emit selectionChanged();
     emit cursorPositionChanged();
@@ -1085,17 +1169,6 @@ void LetterCanvasItem::extendSelectionLeft() {
 
     if (m_cursorPosInSection > 0) {
         m_cursorPosInSection--;
-
-        // Skip recipient name
-        if (m_currentSection == 0 && m_backend) {
-            int recipientStart = m_backend->recipientNameStart();
-            int recipientEnd = m_backend->recipientNameEnd();
-            if (recipientStart >= 0 && recipientEnd >= 0 &&
-                m_cursorPosInSection > recipientStart &&
-                m_cursorPosInSection < recipientEnd) {
-                m_cursorPosInSection = recipientStart;
-            }
-        }
 
         // Update selection
         if (m_cursorPosInSection < m_selectionAnchorInSection) {
@@ -1122,21 +1195,17 @@ void LetterCanvasItem::extendSelectionRight() {
         m_selectionEndInSection = m_cursorPosInSection;
     }
 
-    const QString& section = sectionText(m_currentSection);
+    int maxPos;
+    if (m_currentSection == 0) {
+        // Header uses visual glyph count
+        auto glyphs = buildHeaderVisualGlyphs();
+        maxPos = glyphs.size();
+    } else {
+        maxPos = sectionText(m_currentSection).length();
+    }
 
-    if (m_cursorPosInSection < section.length()) {
+    if (m_cursorPosInSection < maxPos) {
         m_cursorPosInSection++;
-
-        // Skip recipient name
-        if (m_currentSection == 0 && m_backend) {
-            int recipientStart = m_backend->recipientNameStart();
-            int recipientEnd = m_backend->recipientNameEnd();
-            if (recipientStart >= 0 && recipientEnd >= 0 &&
-                m_cursorPosInSection > recipientStart &&
-                m_cursorPosInSection < recipientEnd) {
-                m_cursorPosInSection = recipientEnd;
-            }
-        }
 
         if (m_cursorPosInSection < m_selectionAnchorInSection) {
             m_selectionStartInSection = m_cursorPosInSection;
@@ -1212,14 +1281,9 @@ void LetterCanvasItem::extendSelectionEnd() {
             }
         }
     } else if (m_currentSection == 0) {
-        m_cursorPosInSection = m_header.length();
-        if (m_backend) {
-            int recipientEnd = m_backend->recipientNameEnd();
-            int recipientStart = m_backend->recipientNameStart();
-            if (recipientEnd >= 0 && recipientStart >= 0 && m_cursorPosInSection == recipientEnd) {
-                m_cursorPosInSection = recipientStart;
-            }
-        }
+        // Header uses visual glyph count
+        auto glyphs = buildHeaderVisualGlyphs();
+        m_cursorPosInSection = glyphs.size();
     } else {
         m_cursorPosInSection = m_footer.length();
     }
@@ -1298,10 +1362,13 @@ void LetterCanvasItem::extendSelectionDown() {
         m_selectionEndInSection = m_cursorPosInSection;
     }
 
-    // For header/footer, treat like End
-    if (m_currentSection != 1) {
-        const QString& section = sectionText(m_currentSection);
-        m_cursorPosInSection = section.length();
+    // For header, treat like End with visual positions
+    if (m_currentSection == 0) {
+        auto glyphs = buildHeaderVisualGlyphs();
+        m_cursorPosInSection = glyphs.size();
+    } else if (m_currentSection == 2) {
+        // Footer, treat like End
+        m_cursorPosInSection = m_footer.length();
     } else {
         // In body - stay within body
         auto wrappedLines = wrapBodyText();
@@ -1345,7 +1412,18 @@ void LetterCanvasItem::copySelection() {
 
     int start = qMin(m_selectionStartInSection, m_selectionEndInSection);
     int end = qMax(m_selectionStartInSection, m_selectionEndInSection);
-    QString selectedText = sectionText(m_selectionSection).mid(start, end - start);
+
+    QString selectedText;
+    if (m_selectionSection == 0) {
+        // Header uses visual positions - extract from glyphs
+        auto glyphs = buildHeaderVisualGlyphs();
+        for (int i = start; i < end && i < glyphs.size(); i++) {
+            selectedText += glyphs[i].ch;
+        }
+    } else {
+        // Body/footer use template positions
+        selectedText = sectionText(m_selectionSection).mid(start, end - start);
+    }
 
     QGuiApplication::clipboard()->setText(selectedText);
 }
@@ -1502,10 +1580,8 @@ void LetterCanvasItem::renderText(QPainter* painter) {
         headerSelStart = m_selectionStartInSection;
         headerSelEnd = m_selectionEndInSection;
     }
-    renderLineWithRecipient(painter, m_header, HEADER_LEFT, HEADER_TOP,
+    renderLineWithRecipient(painter, HEADER_TOP,
                            headerCursorCol, font, textColor, recipientColor,
-                           m_backend->recipientNameStart(),
-                           m_backend->recipientNameEnd(),
                            headerSelStart, headerSelEnd, selectionColor);
 
     // Body
@@ -1595,47 +1671,47 @@ void LetterCanvasItem::renderLine(QPainter* painter, const QString& text, int x,
     }
 }
 
-void LetterCanvasItem::renderLineWithRecipient(QPainter* painter, const QString& text, int x, int y,
-                                                int cursorCol, const FontLoader& font,
+void LetterCanvasItem::renderLineWithRecipient(QPainter* painter, int y,
+                                                int cursorVisualPos, const FontLoader& font,
                                                 const QColor& textColor, const QColor& recipientColor,
-                                                int recipientStart, int recipientEnd,
                                                 int selStart, int selEnd,
                                                 const QColor& selectionColor) {
-    int currentX = x;
-    bool hasRecipient = (recipientStart >= 0 && recipientEnd >= 0 && recipientEnd <= text.length());
+    // Header now uses VISUAL cursor/selection positions (glyph indices)
+    // buildHeaderVisualGlyphs() provides individual glyphs for both template chars and name chars
 
-    // Calculate selection positions - use actual character widths
-    int selStartX = -1, selEndX = -1;
+    if (!m_backend || !m_backend->isLoaded()) {
+        return;
+    }
+
+    // Get visual glyph list (template chars + name chars as individual glyphs)
+    auto glyphs = buildHeaderVisualGlyphs();
+
+    // Draw selection background using visual positions
     if (selStart >= 0 && selEnd > selStart) {
-        selStartX = x;
-        for (int i = 0; i < selStart && i < text.length(); i++) {
-            selStartX += font.charWidth(text[i]) + GLYPH_SPACING;
-        }
-        selEndX = selStartX;
-        for (int i = selStart; i < selEnd && i < text.length(); i++) {
-            selEndX += font.charWidth(text[i]) + GLYPH_SPACING;
-        }
+        int selStartX = (selStart < glyphs.size()) ? glyphs[selStart].startX :
+                        (glyphs.isEmpty() ? HEADER_LEFT : glyphs.last().endX);
+        int selEndX = (selEnd <= glyphs.size()) ?
+                      ((selEnd < glyphs.size()) ? glyphs[selEnd].startX : glyphs.last().endX) :
+                      (glyphs.isEmpty() ? HEADER_LEFT : glyphs.last().endX);
         painter->fillRect(selStartX, y, selEndX - selStartX, LINE_HEIGHT, selectionColor);
     }
 
-    // Draw text with recipient name in different color
-    for (int i = 0; i < text.length(); i++) {
-        QColor color = textColor;
-        if (hasRecipient && i >= recipientStart && i < recipientEnd) {
-            color = recipientColor;
-        }
-        QImage glyph = font.getColoredGlyph(text[i], color);
+    // Draw all glyphs
+    for (const auto& g : glyphs) {
+        QColor color = g.isName ? recipientColor : textColor;
+        QImage glyph = font.getColoredGlyph(g.ch, color);
         if (!glyph.isNull()) {
-            painter->drawImage(currentX, y, glyph);
+            painter->drawImage(g.startX, y, glyph);
         }
-        currentX += font.charWidth(text[i]) + GLYPH_SPACING;
     }
 
-    // Draw cursor - use actual character widths for accurate positioning
-    if (cursorCol >= 0 && cursorCol <= text.length()) {
-        int cursorX = x;
-        for (int i = 0; i < cursorCol && i < text.length(); i++) {
-            cursorX += font.charWidth(text[i]) + GLYPH_SPACING;
+    // Draw cursor at visual position
+    if (cursorVisualPos >= 0) {
+        int cursorX;
+        if (cursorVisualPos >= glyphs.size()) {
+            cursorX = glyphs.isEmpty() ? HEADER_LEFT : glyphs.last().endX;
+        } else {
+            cursorX = glyphs[cursorVisualPos].startX;
         }
         painter->fillRect(cursorX, y, 1, LINE_HEIGHT, textColor);
     }

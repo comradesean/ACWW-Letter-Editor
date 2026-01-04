@@ -419,6 +419,45 @@ QByteArray SaveFile::getRawLetterBytes(int player, int storageType, int slot) co
     return m_data.mid(offset, LetterFormat::SIZE);
 }
 
+void SaveFile::setRawLetterBytes(int player, int storageType, int slot, const QByteArray& data) {
+    if (!m_loaded || player < 0 || player >= PLAYER_COUNT) {
+        return;
+    }
+
+    if (data.size() != LetterFormat::SIZE) {
+        qDebug() << "SaveFile::setRawLetterBytes: Invalid data size:" << data.size();
+        return;
+    }
+
+    StorageType type = static_cast<StorageType>(storageType);
+    int maxSlots = getSlotCount(storageType);
+    if (slot < 0 || slot >= maxSlots) {
+        return;
+    }
+
+    uint32_t offset = getLetterOffset(player, type, slot);
+    if (offset + LetterFormat::SIZE > static_cast<uint32_t>(m_data.size())) {
+        return;
+    }
+
+    // Copy the raw bytes directly to the save data
+    for (int i = 0; i < LetterFormat::SIZE; i++) {
+        m_data[offset + i] = data[i];
+    }
+
+    // Also update the backup copy
+    uint32_t backupOffset = getBackupLetterOffset(player, type, slot);
+    if (backupOffset + LetterFormat::SIZE <= static_cast<uint32_t>(m_data.size())) {
+        for (int i = 0; i < LetterFormat::SIZE; i++) {
+            m_data[backupOffset + i] = data[i];
+        }
+    }
+
+    m_modified = true;
+    emit modifiedChanged();
+    emit letterModified(player, storageType, slot);
+}
+
 bool SaveFile::validateChecksum() const {
     if (!m_loaded) return false;
 
