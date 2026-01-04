@@ -1,5 +1,17 @@
 #pragma once
 
+#include <QChar>
+
+// Represents a single visual glyph in the header rendering system
+// Name glyphs are individual characters that all map to the same template position (namePos)
+struct VisualGlyph {
+    QChar ch;           // The character to render
+    int startX;         // X position where glyph starts
+    int endX;           // X position where glyph ends
+    bool isName;        // true if this is part of recipient name
+    int templatePos;    // Template position this glyph maps to (name glyphs map to namePos)
+};
+
 // Shared constants for letter layout and limits
 namespace LetterConstants {
     // Layout constants (in 1x coordinates)

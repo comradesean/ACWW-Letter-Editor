@@ -71,8 +71,8 @@ ApplicationWindow {
         property int cleanReceiverFlags: 0
         property int cleanSenderFlags: 0
         property int cleanNamePosition: 0
-        property int cleanLetterStatus: 0
-        property int cleanLetterOrigin: 0
+        property int cleanLetterIconFlags: 0
+        property int cleanLetterSource: 0
 
         function capture() {
             // Stationery
@@ -97,8 +97,8 @@ ApplicationWindow {
             cleanReceiverFlags = backend.receiverFlags
             cleanSenderFlags = backend.senderFlags
             cleanNamePosition = backend.namePosition
-            cleanLetterStatus = backend.letterStatus
-            cleanLetterOrigin = backend.letterOrigin
+            cleanLetterIconFlags = backend.letterIconFlags
+            cleanLetterSource = backend.letterSource
 
             letterModified = false
         }
@@ -127,8 +127,8 @@ ApplicationWindow {
                 (backend.receiverFlags !== cleanReceiverFlags) ||
                 (backend.senderFlags !== cleanSenderFlags) ||
                 (backend.namePosition !== cleanNamePosition) ||
-                (backend.letterStatus !== cleanLetterStatus) ||
-                (backend.letterOrigin !== cleanLetterOrigin)
+                (backend.letterIconFlags !== cleanLetterIconFlags) ||
+                (backend.letterSource !== cleanLetterSource)
         }
 
         function confirmDiscard(callback) {
@@ -1037,6 +1037,9 @@ ApplicationWindow {
                                     canvas.handleClick(mouse.x, mouse.y)
                                 }
                             }
+                            onDoubleClicked: {
+                                canvas.handleDoubleClick(mouse.x, mouse.y)
+                            }
                         }
                     }
                 }
@@ -1803,41 +1806,14 @@ ApplicationWindow {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                var oldName = backend.recipientName
-                                var newName = recipientNameField.text
-                                var nameChanged = (oldName !== newName)
-
+                                // Recipient info
                                 backend.recipientTownId = parseInt(recipientTownIdField.text) || 0
                                 backend.recipientTown = recipientTownField.text
                                 backend.recipientPlayerId = parseInt(recipientPlayerIdField.text) || 0
+                                backend.recipientName = recipientNameField.text
+                                // Note: The name is rendered visually at namePosition, not stored in canvas text
 
-                                if (nameChanged) {
-                                    var start = backend.recipientNameStart
-                                    var end = backend.recipientNameEnd
-                                    var fullText = canvas.text
-                                    var firstNewline = fullText.indexOf('\n')
-                                    var header = firstNewline >= 0 ? fullText.substring(0, firstNewline) : fullText
-                                    var rest = firstNewline >= 0 ? fullText.substring(firstNewline) : "\n\n"
-
-                                    if (start >= 0 && end >= 0) {
-                                        // Replace or remove existing name
-                                        canvas.text = header.substring(0, start) + newName + header.substring(end) + rest
-                                        if (newName.length > 0) {
-                                            backend.recipientNameEnd = start + newName.length
-                                        } else {
-                                            // Name removed - reset positions
-                                            backend.recipientNameStart = -1
-                                            backend.recipientNameEnd = -1
-                                        }
-                                    } else if (newName.length > 0) {
-                                        // First time - insert name at position 0
-                                        canvas.text = newName + header + rest
-                                        backend.recipientNameStart = 0
-                                        backend.recipientNameEnd = newName.length
-                                    }
-                                }
-                                backend.recipientName = newName
-
+                                // Sender info
                                 backend.senderTownId = parseInt(senderTownIdField.text) || 0
                                 backend.senderTown = senderTownField.text
                                 backend.senderPlayerId = parseInt(senderPlayerIdField.text) || 0
@@ -1845,6 +1821,7 @@ ApplicationWindow {
 
                                 letterInfoDialog.close()
                                 canvas.forceActiveFocus()
+                                canvas.update()  // Redraw to show new name
                             }
                         }
                     }

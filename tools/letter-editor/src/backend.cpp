@@ -83,8 +83,8 @@ static const int LTR_SENDER_FLAGS_OFFSET = 0x30;    // 4 bytes
 // Metadata
 static const int LTR_NAME_POS_OFFSET = 0xEC;  // 1 byte - position to insert name in greeting
 static const int LTR_PAPER_OFFSET = 0xED;     // 1 byte
-static const int LTR_STATUS_OFFSET = 0xEE;    // 1 byte
-static const int LTR_ORIGIN_OFFSET = 0xEF;    // 1 byte
+static const int LTR_ICON_FLAGS_OFFSET = 0xEE;    // 1 byte
+static const int LTR_LETTER_SOURCE_OFFSET = 0xEF; // 1 byte
 static const int LTR_ITEM_OFFSET = 0xF0;      // 2 bytes (little-endian)
 
 Backend::Backend(QObject* parent)
@@ -130,6 +130,7 @@ bool Backend::loadRom(const QUrl& fileUrl) {
 void Backend::setCurrentPaper(int index) {
     if (index >= 0 && index < m_stationery.count() && index != m_currentPaper) {
         m_currentPaper = index;
+        writeMetadataToData();  // Sync to m_letterData
         emit currentPaperChanged();
         emit paperChanged();
     }
@@ -138,6 +139,27 @@ void Backend::setCurrentPaper(int index) {
 void Backend::setLetterText(const QString& text) {
     if (text != m_letterText) {
         m_letterText = text;
+
+        // Parse and sync to m_letterData
+        int firstNewline = text.indexOf('\n');
+        int lastNewline = text.lastIndexOf('\n');
+
+        QString greeting, body, signature;
+        if (firstNewline < 0) {
+            greeting = text;
+        } else if (firstNewline == lastNewline) {
+            greeting = text.left(firstNewline);
+            body = text.mid(firstNewline + 1);
+        } else {
+            greeting = text.left(firstNewline);
+            body = text.mid(firstNewline + 1, lastNewline - firstNewline - 1);
+            signature = text.mid(lastNewline + 1);
+        }
+
+        writeGreetingToData(greeting);
+        writeBodyToData(body);
+        writeSignatureToData(signature);
+
         emit letterTextChanged();
     }
 }
@@ -159,6 +181,7 @@ void Backend::setRecipientNameEnd(int pos) {
 void Backend::setRecipientName(const QString& name) {
     if (name != m_recipientName) {
         m_recipientName = name;
+        writeRecipientToData();  // Sync to m_letterData
         emit recipientInfoChanged();
     }
 }
@@ -166,6 +189,7 @@ void Backend::setRecipientName(const QString& name) {
 void Backend::setRecipientTown(const QString& town) {
     if (town != m_recipientTown) {
         m_recipientTown = town;
+        writeRecipientToData();  // Sync to m_letterData
         emit recipientInfoChanged();
     }
 }
@@ -173,6 +197,7 @@ void Backend::setRecipientTown(const QString& town) {
 void Backend::setRecipientTownId(int id) {
     if (id != m_recipientTownId) {
         m_recipientTownId = id;
+        writeRecipientToData();  // Sync to m_letterData
         emit recipientInfoChanged();
     }
 }
@@ -180,6 +205,7 @@ void Backend::setRecipientTownId(int id) {
 void Backend::setRecipientPlayerId(int id) {
     if (id != m_recipientPlayerId) {
         m_recipientPlayerId = id;
+        writeRecipientToData();  // Sync to m_letterData
         emit recipientInfoChanged();
     }
 }
@@ -187,6 +213,7 @@ void Backend::setRecipientPlayerId(int id) {
 void Backend::setSenderName(const QString& name) {
     if (name != m_senderName) {
         m_senderName = name;
+        writeSenderToData();  // Sync to m_letterData
         emit senderInfoChanged();
     }
 }
@@ -194,6 +221,7 @@ void Backend::setSenderName(const QString& name) {
 void Backend::setSenderTown(const QString& town) {
     if (town != m_senderTown) {
         m_senderTown = town;
+        writeSenderToData();  // Sync to m_letterData
         emit senderInfoChanged();
     }
 }
@@ -201,6 +229,7 @@ void Backend::setSenderTown(const QString& town) {
 void Backend::setSenderTownId(int id) {
     if (id != m_senderTownId) {
         m_senderTownId = id;
+        writeSenderToData();  // Sync to m_letterData
         emit senderInfoChanged();
     }
 }
@@ -208,6 +237,7 @@ void Backend::setSenderTownId(int id) {
 void Backend::setSenderPlayerId(int id) {
     if (id != m_senderPlayerId) {
         m_senderPlayerId = id;
+        writeSenderToData();  // Sync to m_letterData
         emit senderInfoChanged();
     }
 }
@@ -216,6 +246,7 @@ void Backend::setAttachedItem(int item) {
     uint16_t newItem = static_cast<uint16_t>(item & 0xFFFF);
     if (newItem != m_attachedItem) {
         m_attachedItem = newItem;
+        writeMetadataToData();  // Sync to m_letterData
         emit attachedItemChanged();
     }
 }
@@ -224,6 +255,7 @@ void Backend::setReceiverFlags(int flags) {
     uint32_t newFlags = static_cast<uint32_t>(flags);
     if (newFlags != m_receiverFlags) {
         m_receiverFlags = newFlags;
+        writeRecipientToData();  // Sync to m_letterData
         emit letterMetadataChanged();
     }
 }
@@ -232,6 +264,7 @@ void Backend::setSenderFlags(int flags) {
     uint32_t newFlags = static_cast<uint32_t>(flags);
     if (newFlags != m_senderFlags) {
         m_senderFlags = newFlags;
+        writeSenderToData();  // Sync to m_letterData
         emit letterMetadataChanged();
     }
 }
@@ -240,22 +273,25 @@ void Backend::setNamePosition(int pos) {
     uint8_t newPos = static_cast<uint8_t>(pos & 0xFF);
     if (newPos != m_namePosition) {
         m_namePosition = newPos;
+        writeMetadataToData();  // Sync to m_letterData
         emit letterMetadataChanged();
     }
 }
 
-void Backend::setLetterStatus(int status) {
-    uint8_t newStatus = static_cast<uint8_t>(status & 0xFF);
-    if (newStatus != m_letterStatus) {
-        m_letterStatus = newStatus;
+void Backend::setLetterIconFlags(int flags) {
+    uint8_t newFlags = static_cast<uint8_t>(flags & 0xFF);
+    if (newFlags != m_letterIconFlags) {
+        m_letterIconFlags = newFlags;
+        writeMetadataToData();  // Sync to m_letterData
         emit letterMetadataChanged();
     }
 }
 
-void Backend::setLetterOrigin(int origin) {
-    uint8_t newOrigin = static_cast<uint8_t>(origin & 0xFF);
-    if (newOrigin != m_letterOrigin) {
-        m_letterOrigin = newOrigin;
+void Backend::setLetterSource(int source) {
+    uint8_t newSource = static_cast<uint8_t>(source & 0xFF);
+    if (newSource != m_letterSource) {
+        m_letterSource = newSource;
+        writeMetadataToData();  // Sync to m_letterData
         emit letterMetadataChanged();
     }
 }
@@ -350,220 +386,88 @@ bool Backend::importLtr(const QUrl& fileUrl) {
         return false;
     }
 
-    // Extract recipient name, town, and IDs from To field
-    uint16_t recipientTownId = static_cast<uint8_t>(data[LTR_TO_TOWN_ID_OFFSET]) |
-                               (static_cast<uint8_t>(data[LTR_TO_TOWN_ID_OFFSET + 1]) << 8);
-    QByteArray toTownBytes = data.mid(LTR_TO_TOWN_OFFSET, 8);
-    QString recipientTown = decodeAcwwText(toTownBytes);
-    uint16_t recipientPlayerId = static_cast<uint8_t>(data[LTR_TO_PLAYER_ID_OFFSET]) |
-                                 (static_cast<uint8_t>(data[LTR_TO_PLAYER_ID_OFFSET + 1]) << 8);
-    QByteArray toNameBytes = data.mid(LTR_TO_NAME_OFFSET, 8);
-    QString recipientName = decodeAcwwText(toNameBytes);
+    // Store raw bytes as single source of truth
+    m_letterData = data;
 
-    // Extract sender name, town, and IDs from From field
-    uint16_t senderTownId = static_cast<uint8_t>(data[LTR_FROM_TOWN_ID_OFFSET]) |
-                            (static_cast<uint8_t>(data[LTR_FROM_TOWN_ID_OFFSET + 1]) << 8);
-    QByteArray fromTownBytes = data.mid(LTR_FROM_TOWN_OFFSET, 8);
-    QString senderTown = decodeAcwwText(fromTownBytes);
-    uint16_t senderPlayerId = static_cast<uint8_t>(data[LTR_FROM_PLAYER_ID_OFFSET]) |
-                              (static_cast<uint8_t>(data[LTR_FROM_PLAYER_ID_OFFSET + 1]) << 8);
-    QByteArray fromNameBytes = data.mid(LTR_FROM_NAME_OFFSET, 8);
-    QString senderName = decodeAcwwText(fromNameBytes);
+    // Sync UI state from the raw data
+    syncUIFromLetterData();
 
-    // Extract subject/greeting template
-    QByteArray subjectBytes = data.mid(LTR_SUBJECT_OFFSET, LTR_SUBJECT_SIZE);
-    QString subjectTemplate = decodeAcwwText(subjectBytes);
-
-    // Get name insertion position
-    int namePos = static_cast<uint8_t>(data[LTR_NAME_POS_OFFSET]);
-
-    // Insert recipient name into greeting at the specified position
-    QString subject;
-    int recipientStart = -1;
-    int recipientEnd = -1;
-    if (namePos >= 0 && namePos <= subjectTemplate.length() && !recipientName.isEmpty()) {
-        subject = subjectTemplate.left(namePos) + recipientName + subjectTemplate.mid(namePos);
-        recipientStart = namePos;
-        recipientEnd = namePos + recipientName.length();
-    } else {
-        subject = subjectTemplate;
-    }
-
-    // Extract body bytes (99 bytes total)
-    QByteArray bodyBytes = data.mid(LTR_BODY_OFFSET, LTR_BODY_SIZE);
-
-    // Decode body - preserve exactly as stored (including spacing and newlines)
-    QString body = decodeAcwwText(bodyBytes);
-
-    // Extract signature
-    QByteArray sigBytes = data.mid(LTR_SIGNATURE_OFFSET, LTR_SIGNATURE_SIZE);
-    QString signature = decodeAcwwText(sigBytes);
-
-    // Extract paper ID
-    int paperId = static_cast<uint8_t>(data[LTR_PAPER_OFFSET]);
-    if (paperId < 0 || paperId > 63) {
-        paperId = 0;
-    }
-
-    // Extract flags
-    uint32_t receiverFlags = static_cast<uint8_t>(data[LTR_RECEIVER_FLAGS_OFFSET]) |
-                             (static_cast<uint8_t>(data[LTR_RECEIVER_FLAGS_OFFSET + 1]) << 8) |
-                             (static_cast<uint8_t>(data[LTR_RECEIVER_FLAGS_OFFSET + 2]) << 16) |
-                             (static_cast<uint8_t>(data[LTR_RECEIVER_FLAGS_OFFSET + 3]) << 24);
-    uint32_t senderFlags = static_cast<uint8_t>(data[LTR_SENDER_FLAGS_OFFSET]) |
-                           (static_cast<uint8_t>(data[LTR_SENDER_FLAGS_OFFSET + 1]) << 8) |
-                           (static_cast<uint8_t>(data[LTR_SENDER_FLAGS_OFFSET + 2]) << 16) |
-                           (static_cast<uint8_t>(data[LTR_SENDER_FLAGS_OFFSET + 3]) << 24);
-
-    // Extract status, origin, and attached item
-    uint8_t letterStatus = static_cast<uint8_t>(data[LTR_STATUS_OFFSET]);
-    uint8_t letterOrigin = static_cast<uint8_t>(data[LTR_ORIGIN_OFFSET]);
-    uint16_t attachedItem = static_cast<uint8_t>(data[LTR_ITEM_OFFSET]) |
-                            (static_cast<uint8_t>(data[LTR_ITEM_OFFSET + 1]) << 8);
-
-    // Store the separate sections for use by canvas.setLetterContent()
-    m_letterHeader = subject;
-    m_letterBody = body;
-    m_letterFooter = signature;
-
-    // Build the combined letter text
-    QString letterText = subject + "\n" + body + "\n" + signature;
-
-    // Update state
-    m_recipientName = recipientName;
-    m_recipientTown = recipientTown;
-    m_recipientTownId = recipientTownId;
-    m_recipientPlayerId = recipientPlayerId;
-    m_senderName = senderName;
-    m_senderTown = senderTown;
-    m_senderTownId = senderTownId;
-    m_senderPlayerId = senderPlayerId;
-    m_recipientNameStart = recipientStart;
-    m_recipientNameEnd = recipientEnd;
-    m_receiverFlags = receiverFlags;
-    m_senderFlags = senderFlags;
-    m_namePosition = namePos;
-    m_letterStatus = letterStatus;
-    m_letterOrigin = letterOrigin;
-    m_attachedItem = attachedItem;
-    setLetterText(letterText);
-    setCurrentPaper(paperId);
+    // Emit signals for UI update
+    emit letterTextChanged();
+    emit recipientInfoChanged();
+    emit senderInfoChanged();
+    emit recipientNamePositionChanged();
+    emit currentPaperChanged();
+    emit paperChanged();
+    emit attachedItemChanged();
+    emit letterMetadataChanged();
 
     qDebug() << "Imported LTR file:" << path;
-    qDebug() << "Paper ID:" << paperId;
-    qDebug() << "Recipient:" << recipientName << "from" << recipientTown;
-    qDebug() << "Sender:" << senderName << "from" << senderTown;
-    qDebug() << "Subject template:" << subjectTemplate;
-    qDebug() << "Subject (with name):" << subject;
-    qDebug() << "Body:" << body;
-    qDebug() << "Signature:" << signature;
-
     return true;
 }
 
 bool Backend::exportLtr(const QUrl& fileUrl) const {
     QString path = fileUrl.toLocalFile();
 
-    // Parse new format: header\nbody\nfooter
-    int firstNewline = m_letterText.indexOf('\n');
-    int lastNewline = m_letterText.lastIndexOf('\n');
-
-    QString subject, body, signature;
-    if (firstNewline < 0) {
-        // No newlines - all header
-        subject = m_letterText;
-    } else if (firstNewline == lastNewline) {
-        // One newline - header and body only
-        subject = m_letterText.left(firstNewline);
-        body = m_letterText.mid(firstNewline + 1);
-    } else {
-        // Two+ newlines - header, body, footer
-        subject = m_letterText.left(firstNewline);
-        body = m_letterText.mid(firstNewline + 1, lastNewline - firstNewline - 1);
-        signature = m_letterText.mid(lastNewline + 1);
+    if (m_letterData.size() < LTR_FILE_SIZE) {
+        qDebug() << "Cannot export LTR: No letter data";
+        return false;
     }
 
-    // Remove any newlines from body for export (they become 0x86 via encoding)
-    // Body newlines are preserved as they map to 0x86 in encodeAcwwText
-
-    // Create LTR file buffer (244 bytes, all zeros initially)
-    QByteArray data(LTR_FILE_SIZE, 0);
-
-    // Encode and write subject
-    QByteArray subjectEncoded = encodeAcwwText(subject, LTR_SUBJECT_SIZE);
-    for (int i = 0; i < LTR_SUBJECT_SIZE; i++) {
-        data[LTR_SUBJECT_OFFSET + i] = subjectEncoded[i];
-    }
-
-    // Encode and write body
-    QByteArray bodyEncoded = encodeAcwwText(body, LTR_BODY_SIZE);
-    for (int i = 0; i < LTR_BODY_SIZE; i++) {
-        data[LTR_BODY_OFFSET + i] = bodyEncoded[i];
-    }
-
-    // Encode and write signature
-    QByteArray sigEncoded = encodeAcwwText(signature, LTR_SIGNATURE_SIZE);
-    for (int i = 0; i < LTR_SIGNATURE_SIZE; i++) {
-        data[LTR_SIGNATURE_OFFSET + i] = sigEncoded[i];
-    }
-
-    // Write paper ID and metadata
-    data[LTR_PAPER_OFFSET] = static_cast<char>(m_currentPaper & 0x3F);
-    data[LTR_STATUS_OFFSET] = static_cast<char>(m_letterStatus);
-    data[LTR_ORIGIN_OFFSET] = static_cast<char>(m_letterOrigin);
-    data[LTR_ITEM_OFFSET] = static_cast<char>(m_attachedItem & 0xFF);
-    data[LTR_ITEM_OFFSET + 1] = static_cast<char>((m_attachedItem >> 8) & 0xFF);
-
-    // Write flags
-    data[LTR_RECEIVER_FLAGS_OFFSET] = static_cast<char>(m_receiverFlags & 0xFF);
-    data[LTR_RECEIVER_FLAGS_OFFSET + 1] = static_cast<char>((m_receiverFlags >> 8) & 0xFF);
-    data[LTR_RECEIVER_FLAGS_OFFSET + 2] = static_cast<char>((m_receiverFlags >> 16) & 0xFF);
-    data[LTR_RECEIVER_FLAGS_OFFSET + 3] = static_cast<char>((m_receiverFlags >> 24) & 0xFF);
-    data[LTR_SENDER_FLAGS_OFFSET] = static_cast<char>(m_senderFlags & 0xFF);
-    data[LTR_SENDER_FLAGS_OFFSET + 1] = static_cast<char>((m_senderFlags >> 8) & 0xFF);
-    data[LTR_SENDER_FLAGS_OFFSET + 2] = static_cast<char>((m_senderFlags >> 16) & 0xFF);
-    data[LTR_SENDER_FLAGS_OFFSET + 3] = static_cast<char>((m_senderFlags >> 24) & 0xFF);
-
-    // Write recipient info
-    data[LTR_TO_TOWN_ID_OFFSET] = static_cast<char>(m_recipientTownId & 0xFF);
-    data[LTR_TO_TOWN_ID_OFFSET + 1] = static_cast<char>((m_recipientTownId >> 8) & 0xFF);
-    QByteArray recipientTownEncoded = encodeAcwwText(m_recipientTown, 8);
-    for (int i = 0; i < 8; i++) {
-        data[LTR_TO_TOWN_OFFSET + i] = recipientTownEncoded[i];
-    }
-    data[LTR_TO_PLAYER_ID_OFFSET] = static_cast<char>(m_recipientPlayerId & 0xFF);
-    data[LTR_TO_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_recipientPlayerId >> 8) & 0xFF);
-    QByteArray recipientNameEncoded = encodeAcwwText(m_recipientName, 8);
-    for (int i = 0; i < 8; i++) {
-        data[LTR_TO_NAME_OFFSET + i] = recipientNameEncoded[i];
-    }
-
-    // Write sender info
-    data[LTR_FROM_TOWN_ID_OFFSET] = static_cast<char>(m_senderTownId & 0xFF);
-    data[LTR_FROM_TOWN_ID_OFFSET + 1] = static_cast<char>((m_senderTownId >> 8) & 0xFF);
-    QByteArray senderTownEncoded = encodeAcwwText(m_senderTown, 8);
-    for (int i = 0; i < 8; i++) {
-        data[LTR_FROM_TOWN_OFFSET + i] = senderTownEncoded[i];
-    }
-    data[LTR_FROM_PLAYER_ID_OFFSET] = static_cast<char>(m_senderPlayerId & 0xFF);
-    data[LTR_FROM_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_senderPlayerId >> 8) & 0xFF);
-    QByteArray senderNameEncoded = encodeAcwwText(m_senderName, 8);
-    for (int i = 0; i < 8; i++) {
-        data[LTR_FROM_NAME_OFFSET + i] = senderNameEncoded[i];
-    }
-
-    // Write file
+    // Write m_letterData directly - it's the single source of truth
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {
         qDebug() << "Failed to create LTR file:" << path;
         return false;
     }
 
-    file.write(data);
+    file.write(m_letterData);
     file.close();
 
     qDebug() << "Exported LTR file:" << path;
     return true;
+}
+
+QVector<VisualGlyph> Backend::buildHeaderVisualGlyphs(const QString& templateText, int startX, int glyphSpacing) const {
+    QVector<VisualGlyph> glyphs;
+
+    if (!m_loaded) {
+        return glyphs;
+    }
+
+    int namePos = static_cast<int>(m_namePosition);
+    bool hasName = !m_recipientName.isEmpty() && namePos >= 0 && namePos <= templateText.length();
+
+    int currentX = startX;
+
+    for (int i = 0; i < templateText.length(); i++) {
+        // At namePos, insert each name character as individual glyphs
+        // All name glyphs map to the same template position (namePos)
+        if (hasName && i == namePos) {
+            for (const QChar& c : m_recipientName) {
+                int glyphStartX = currentX;
+                currentX += m_font.charWidth(c) + glyphSpacing;
+                glyphs.append({c, glyphStartX, currentX, true, namePos});
+            }
+        }
+
+        // Template glyph
+        int glyphStartX = currentX;
+        int charWidth = m_font.charWidth(templateText[i]) + glyphSpacing;
+        currentX += charWidth;
+        glyphs.append({templateText[i], glyphStartX, currentX, false, i});
+    }
+
+    // Handle name at end of template (namePos == templateText.length())
+    if (hasName && namePos >= templateText.length()) {
+        for (const QChar& c : m_recipientName) {
+            int glyphStartX = currentX;
+            currentX += m_font.charWidth(c) + glyphSpacing;
+            glyphs.append({c, glyphStartX, currentX, true, namePos});
+        }
+    }
+
+    return glyphs;
 }
 
 bool Backend::exportPng(const QUrl& fileUrl, int scale) const {
@@ -651,34 +555,17 @@ bool Backend::exportPng(const QUrl& fileUrl, int scale) const {
         }
     };
 
-    // Helper lambda to draw header with recipient coloring
-    auto drawHeader = [&](const QString& text, int x, int y) {
-        int drawX = x;
-
-        for (int i = 0; i < text.length(); i++) {
-            QChar ch = text[i];
-
-            // Determine color - use recipient color if within recipient name range
-            QColor color = textColor;
-            if (m_recipientNameStart >= 0 && m_recipientNameEnd >= 0 &&
-                i >= m_recipientNameStart && i < m_recipientNameEnd) {
-                color = recipientColor;
-            }
-
-            QImage glyph = m_font.getColoredGlyph(ch, color);
-
-            if (!glyph.isNull()) {
-                QImage scaledGlyph = glyph.scaled(16 * scale, 16 * scale, Qt::IgnoreAspectRatio, Qt::FastTransformation);
-                painter.drawImage(drawX, y, scaledGlyph);
-                drawX += (m_font.charWidth(ch) + 1) * scale;
-            } else {
-                drawX += (m_font.charWidth(ch) + 1) * scale;
-            }
+    // Draw header using shared visual glyph builder
+    auto headerGlyphs = buildHeaderVisualGlyphs(header, 0, 1);  // Build at x=0 with spacing=1
+    for (const auto& g : headerGlyphs) {
+        QColor color = g.isName ? recipientColor : textColor;
+        QImage glyph = m_font.getColoredGlyph(g.ch, color);
+        if (!glyph.isNull()) {
+            QImage scaledGlyph = glyph.scaled(16 * scale, 16 * scale, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+            // Offset by headerLeft and scale the x position
+            painter.drawImage(headerLeft + g.startX * scale, headerTop, scaledGlyph);
         }
-    };
-
-    // Draw header with recipient coloring
-    drawHeader(header, headerLeft, headerTop);
+    }
 
     // Draw body with word wrapping
     int bodyLine = 0;
@@ -834,43 +721,11 @@ void Backend::loadCurrentSlot() {
         return;
     }
 
-    Letter letter = m_saveFile.getLetter(m_currentPlayer, m_currentStorageType, m_currentSlot);
+    // Get raw letter bytes as single source of truth
+    m_letterData = m_saveFile.getRawLetterBytes(m_currentPlayer, m_currentStorageType, m_currentSlot);
 
-    // Update backend state from letter
-    m_recipientName = letter.toPlayerName;
-    m_recipientTown = letter.toTownName;
-    m_recipientTownId = letter.toTownId;
-    m_recipientPlayerId = letter.toPlayerId;
-    m_senderName = letter.fromPlayerName;
-    m_senderTown = letter.fromTownName;
-    m_senderTownId = letter.fromTownId;
-    m_senderPlayerId = letter.fromPlayerId;
-
-    // Get greeting with name inserted
-    QString greetingWithName = letter.getGreetingWithName();
-    m_recipientNameStart = letter.namePosition;
-    m_recipientNameEnd = letter.namePosition + letter.toPlayerName.length();
-
-    // Load all metadata fields
-    m_receiverFlags = letter.receiverFlags;
-    m_senderFlags = letter.senderFlags;
-    m_namePosition = letter.namePosition;
-    m_letterStatus = letter.status;
-    m_letterOrigin = letter.originType;
-    m_attachedItem = letter.attachedItem;
-
-    // Store sections
-    m_letterHeader = greetingWithName;
-    m_letterBody = letter.body;
-    m_letterFooter = letter.signature;
-
-    // Build combined text
-    m_letterText = greetingWithName + "\n" + letter.body + "\n" + letter.signature;
-
-    // Set paper
-    if (letter.stationeryType >= 0 && letter.stationeryType < 64) {
-        m_currentPaper = letter.stationeryType;
-    }
+    // Sync UI state from the raw data
+    syncUIFromLetterData();
 
     emit letterTextChanged();
     emit recipientInfoChanged();
@@ -890,55 +745,13 @@ void Backend::saveCurrentSlot() {
         return;
     }
 
-    // Parse sections from letter text
-    int firstNewline = m_letterText.indexOf('\n');
-    int lastNewline = m_letterText.lastIndexOf('\n');
-
-    QString header, body, signature;
-    if (firstNewline < 0) {
-        header = m_letterText;
-    } else if (firstNewline == lastNewline) {
-        header = m_letterText.left(firstNewline);
-        body = m_letterText.mid(firstNewline + 1);
-    } else {
-        header = m_letterText.left(firstNewline);
-        body = m_letterText.mid(firstNewline + 1, lastNewline - firstNewline - 1);
-        signature = m_letterText.mid(lastNewline + 1);
+    if (m_letterData.size() < LTR_FILE_SIZE) {
+        qDebug() << "Backend::saveCurrentSlot: No letter data to save";
+        return;
     }
 
-    // Build letter structure
-    Letter letter;
-    letter.toTownId = m_recipientTownId;
-    letter.toTownName = m_recipientTown;
-    letter.toPlayerId = m_recipientPlayerId;
-    letter.toPlayerName = m_recipientName;
-    letter.fromTownId = m_senderTownId;
-    letter.fromTownName = m_senderTown;
-    letter.fromPlayerId = m_senderPlayerId;
-    letter.fromPlayerName = m_senderName;
-
-    // Remove recipient name from header to get template
-    if (m_recipientNameStart >= 0 && m_recipientNameEnd > m_recipientNameStart) {
-        letter.greeting = header.left(m_recipientNameStart) + header.mid(m_recipientNameEnd);
-        letter.namePosition = m_recipientNameStart;
-    } else {
-        letter.greeting = header;
-        letter.namePosition = 0;
-    }
-
-    letter.body = body;
-    letter.signature = signature;
-    letter.stationeryType = m_currentPaper;
-
-    // Preserve all metadata fields
-    letter.receiverFlags = m_receiverFlags;
-    letter.senderFlags = m_senderFlags;
-    letter.status = m_letterStatus;
-    letter.originType = m_letterOrigin;
-    letter.attachedItem = m_attachedItem;
-
-    // Save to file
-    m_saveFile.setLetter(m_currentPlayer, m_currentStorageType, m_currentSlot, letter);
+    // Save m_letterData directly - it's the single source of truth
+    m_saveFile.setRawLetterBytes(m_currentPlayer, m_currentStorageType, m_currentSlot, m_letterData);
 
     qDebug() << "Backend::saveCurrentSlot: Saved to player" << m_currentPlayer
              << "storage" << m_currentStorageType << "slot" << m_currentSlot;
@@ -952,6 +765,10 @@ QVariantList Backend::getSlotSummaries() const {
 }
 
 void Backend::clearLetter() {
+    // Reset canonical letter data to empty buffer
+    initLetterData();
+
+    // Reset UI state
     m_letterText.clear();
     m_letterHeader.clear();
     m_letterBody.clear();
@@ -972,9 +789,12 @@ void Backend::clearLetter() {
     m_receiverFlags = 0;
     m_senderFlags = 0;
     m_namePosition = 0;
-    m_letterStatus = 0;
-    m_letterOrigin = 0;
+    m_letterIconFlags = 0;
+    m_letterSource = 0;
     m_attachedItem = 0xFFF1;  // "No item" value
+
+    // Update m_letterData with default metadata (attached item)
+    writeMetadataToData();
 
     emit letterTextChanged();
     emit attachedItemChanged();
@@ -997,37 +817,25 @@ void Backend::importAddresseeFromSave() {
     m_recipientPlayerId = m_saveFile.getPlayerId(m_currentPlayer);
     m_recipientTownId = m_saveFile.getTownId(m_currentPlayer);
 
-    // Update letter header with new recipient name
-    if (newName != m_recipientName) {
-        // Parse current text into sections
-        int firstNewline = m_letterText.indexOf('\n');
-        QString header = firstNewline >= 0 ? m_letterText.left(firstNewline) : m_letterText;
-        QString rest = firstNewline >= 0 ? m_letterText.mid(firstNewline) : "\n\n";
+    // Update recipient name - the name is visual only, not stored in header text
+    // The canvas renders the name at namePosition during paint
+    m_recipientName = newName;
 
-        if (m_recipientNameStart >= 0 && m_recipientNameEnd >= 0 && m_recipientNameEnd <= header.length()) {
-            // Replace existing name in header
-            header = header.left(m_recipientNameStart) + newName + header.mid(m_recipientNameEnd);
-            if (!newName.isEmpty()) {
-                m_recipientNameEnd = m_recipientNameStart + newName.length();
-            } else {
-                m_recipientNameStart = -1;
-                m_recipientNameEnd = -1;
-            }
-        } else if (!newName.isEmpty()) {
-            // No existing position - insert at beginning of header
-            header = newName + header;
-            m_recipientNameStart = 0;
-            m_recipientNameEnd = newName.length();
-        }
+    // Update the name in the raw letter data (recipient field)
+    writeRecipientToData();
 
-        m_letterText = header + rest;
-        m_letterHeader = header;
-        emit letterTextChanged();
-        emit recipientNamePositionChanged();
+    // Update recipientNameStart/End for visual rendering purposes
+    // These indicate where the name appears visually (at namePosition)
+    if (!newName.isEmpty()) {
+        m_recipientNameStart = m_namePosition;
+        m_recipientNameEnd = m_namePosition + newName.length();
+    } else {
+        m_recipientNameStart = -1;
+        m_recipientNameEnd = -1;
     }
 
-    m_recipientName = newName;
     emit recipientInfoChanged();
+    emit recipientNamePositionChanged();
 
     qDebug() << "Backend::importAddresseeFromSave: Imported"
              << m_recipientName << "from" << m_recipientTown
@@ -1042,91 +850,11 @@ bool Backend::playerExists(int player) const {
 }
 
 QString Backend::getLetterHex() const {
-    QByteArray data;
+    // Use m_letterData directly - it's the single source of truth
+    const QByteArray& data = m_letterData;
 
-    // Always reconstruct from current UI fields to show what's in the editor
-    {
-        // Build the letter data (same as exportLtr)
-        int firstNewline = m_letterText.indexOf('\n');
-        int lastNewline = m_letterText.lastIndexOf('\n');
-
-        QString subject, body, signature;
-        if (firstNewline < 0) {
-            subject = m_letterText;
-        } else if (firstNewline == lastNewline) {
-            subject = m_letterText.left(firstNewline);
-            body = m_letterText.mid(firstNewline + 1);
-        } else {
-            subject = m_letterText.left(firstNewline);
-            body = m_letterText.mid(firstNewline + 1, lastNewline - firstNewline - 1);
-            signature = m_letterText.mid(lastNewline + 1);
-        }
-
-        // Create LTR buffer (244 bytes)
-        data = QByteArray(LTR_FILE_SIZE, 0);
-
-        // Encode and write subject
-        QByteArray subjectEncoded = encodeAcwwText(subject, LTR_SUBJECT_SIZE);
-        for (int i = 0; i < LTR_SUBJECT_SIZE; i++) {
-            data[LTR_SUBJECT_OFFSET + i] = subjectEncoded[i];
-        }
-
-        // Encode and write body
-        QByteArray bodyEncoded = encodeAcwwText(body, LTR_BODY_SIZE);
-        for (int i = 0; i < LTR_BODY_SIZE; i++) {
-            data[LTR_BODY_OFFSET + i] = bodyEncoded[i];
-        }
-
-        // Encode and write signature
-        QByteArray sigEncoded = encodeAcwwText(signature, LTR_SIGNATURE_SIZE);
-        for (int i = 0; i < LTR_SIGNATURE_SIZE; i++) {
-            data[LTR_SIGNATURE_OFFSET + i] = sigEncoded[i];
-        }
-
-        // Write paper ID and metadata
-        data[LTR_PAPER_OFFSET] = static_cast<char>(m_currentPaper & 0x3F);
-        data[LTR_STATUS_OFFSET] = static_cast<char>(m_letterStatus);
-        data[LTR_ORIGIN_OFFSET] = static_cast<char>(m_letterOrigin);
-        data[LTR_ITEM_OFFSET] = static_cast<char>(m_attachedItem & 0xFF);
-        data[LTR_ITEM_OFFSET + 1] = static_cast<char>((m_attachedItem >> 8) & 0xFF);
-
-        // Write flags
-        data[LTR_RECEIVER_FLAGS_OFFSET] = static_cast<char>(m_receiverFlags & 0xFF);
-        data[LTR_RECEIVER_FLAGS_OFFSET + 1] = static_cast<char>((m_receiverFlags >> 8) & 0xFF);
-        data[LTR_RECEIVER_FLAGS_OFFSET + 2] = static_cast<char>((m_receiverFlags >> 16) & 0xFF);
-        data[LTR_RECEIVER_FLAGS_OFFSET + 3] = static_cast<char>((m_receiverFlags >> 24) & 0xFF);
-        data[LTR_SENDER_FLAGS_OFFSET] = static_cast<char>(m_senderFlags & 0xFF);
-        data[LTR_SENDER_FLAGS_OFFSET + 1] = static_cast<char>((m_senderFlags >> 8) & 0xFF);
-        data[LTR_SENDER_FLAGS_OFFSET + 2] = static_cast<char>((m_senderFlags >> 16) & 0xFF);
-        data[LTR_SENDER_FLAGS_OFFSET + 3] = static_cast<char>((m_senderFlags >> 24) & 0xFF);
-
-        // Write recipient info
-        data[LTR_TO_TOWN_ID_OFFSET] = static_cast<char>(m_recipientTownId & 0xFF);
-        data[LTR_TO_TOWN_ID_OFFSET + 1] = static_cast<char>((m_recipientTownId >> 8) & 0xFF);
-        QByteArray recipientTownEncoded = encodeAcwwText(m_recipientTown, 8);
-        for (int i = 0; i < 8; i++) {
-            data[LTR_TO_TOWN_OFFSET + i] = recipientTownEncoded[i];
-        }
-        data[LTR_TO_PLAYER_ID_OFFSET] = static_cast<char>(m_recipientPlayerId & 0xFF);
-        data[LTR_TO_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_recipientPlayerId >> 8) & 0xFF);
-        QByteArray recipientNameEncoded = encodeAcwwText(m_recipientName, 8);
-        for (int i = 0; i < 8; i++) {
-            data[LTR_TO_NAME_OFFSET + i] = recipientNameEncoded[i];
-        }
-
-        // Write sender info
-        data[LTR_FROM_TOWN_ID_OFFSET] = static_cast<char>(m_senderTownId & 0xFF);
-        data[LTR_FROM_TOWN_ID_OFFSET + 1] = static_cast<char>((m_senderTownId >> 8) & 0xFF);
-        QByteArray senderTownEncoded = encodeAcwwText(m_senderTown, 8);
-        for (int i = 0; i < 8; i++) {
-            data[LTR_FROM_TOWN_OFFSET + i] = senderTownEncoded[i];
-        }
-        data[LTR_FROM_PLAYER_ID_OFFSET] = static_cast<char>(m_senderPlayerId & 0xFF);
-        data[LTR_FROM_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_senderPlayerId >> 8) & 0xFF);
-        QByteArray senderNameEncoded = encodeAcwwText(m_senderName, 8);
-        for (int i = 0; i < 8; i++) {
-            data[LTR_FROM_NAME_OFFSET + i] = senderNameEncoded[i];
-        }
+    if (data.size() < LTR_FILE_SIZE) {
+        return QStringLiteral("No letter data loaded");
     }
 
     // Format as hex dump
@@ -1293,4 +1021,197 @@ QVariantList Backend::getItemsByCategory(const QString& categoryName) const {
     }
 
     return result;
+}
+
+// ========================================
+// Letter Data Helpers
+// ========================================
+
+void Backend::initLetterData() {
+    m_letterData = QByteArray(LTR_FILE_SIZE, 0);
+}
+
+void Backend::writeGreetingToData(const QString& greeting) {
+    if (m_letterData.size() < LTR_FILE_SIZE) initLetterData();
+    QByteArray encoded = encodeAcwwText(greeting, LTR_SUBJECT_SIZE);
+    for (int i = 0; i < LTR_SUBJECT_SIZE; i++) {
+        m_letterData[LTR_SUBJECT_OFFSET + i] = encoded[i];
+    }
+}
+
+void Backend::writeBodyToData(const QString& body) {
+    if (m_letterData.size() < LTR_FILE_SIZE) initLetterData();
+    QByteArray encoded = encodeAcwwText(body, LTR_BODY_SIZE);
+    for (int i = 0; i < LTR_BODY_SIZE; i++) {
+        m_letterData[LTR_BODY_OFFSET + i] = encoded[i];
+    }
+}
+
+void Backend::writeSignatureToData(const QString& signature) {
+    if (m_letterData.size() < LTR_FILE_SIZE) initLetterData();
+    QByteArray encoded = encodeAcwwText(signature, LTR_SIGNATURE_SIZE);
+    for (int i = 0; i < LTR_SIGNATURE_SIZE; i++) {
+        m_letterData[LTR_SIGNATURE_OFFSET + i] = encoded[i];
+    }
+}
+
+void Backend::writeRecipientToData() {
+    if (m_letterData.size() < LTR_FILE_SIZE) initLetterData();
+
+    // Town ID
+    m_letterData[LTR_TO_TOWN_ID_OFFSET] = static_cast<char>(m_recipientTownId & 0xFF);
+    m_letterData[LTR_TO_TOWN_ID_OFFSET + 1] = static_cast<char>((m_recipientTownId >> 8) & 0xFF);
+
+    // Town name
+    QByteArray townEncoded = encodeAcwwText(m_recipientTown, 8);
+    for (int i = 0; i < 8; i++) {
+        m_letterData[LTR_TO_TOWN_OFFSET + i] = townEncoded[i];
+    }
+
+    // Player ID
+    m_letterData[LTR_TO_PLAYER_ID_OFFSET] = static_cast<char>(m_recipientPlayerId & 0xFF);
+    m_letterData[LTR_TO_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_recipientPlayerId >> 8) & 0xFF);
+
+    // Player name
+    QByteArray nameEncoded = encodeAcwwText(m_recipientName, 8);
+    for (int i = 0; i < 8; i++) {
+        m_letterData[LTR_TO_NAME_OFFSET + i] = nameEncoded[i];
+    }
+
+    // Receiver flags
+    m_letterData[LTR_RECEIVER_FLAGS_OFFSET] = static_cast<char>(m_receiverFlags & 0xFF);
+    m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 1] = static_cast<char>((m_receiverFlags >> 8) & 0xFF);
+    m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 2] = static_cast<char>((m_receiverFlags >> 16) & 0xFF);
+    m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 3] = static_cast<char>((m_receiverFlags >> 24) & 0xFF);
+}
+
+void Backend::writeSenderToData() {
+    if (m_letterData.size() < LTR_FILE_SIZE) initLetterData();
+
+    // Town ID
+    m_letterData[LTR_FROM_TOWN_ID_OFFSET] = static_cast<char>(m_senderTownId & 0xFF);
+    m_letterData[LTR_FROM_TOWN_ID_OFFSET + 1] = static_cast<char>((m_senderTownId >> 8) & 0xFF);
+
+    // Town name
+    QByteArray townEncoded = encodeAcwwText(m_senderTown, 8);
+    for (int i = 0; i < 8; i++) {
+        m_letterData[LTR_FROM_TOWN_OFFSET + i] = townEncoded[i];
+    }
+
+    // Player ID
+    m_letterData[LTR_FROM_PLAYER_ID_OFFSET] = static_cast<char>(m_senderPlayerId & 0xFF);
+    m_letterData[LTR_FROM_PLAYER_ID_OFFSET + 1] = static_cast<char>((m_senderPlayerId >> 8) & 0xFF);
+
+    // Player name
+    QByteArray nameEncoded = encodeAcwwText(m_senderName, 8);
+    for (int i = 0; i < 8; i++) {
+        m_letterData[LTR_FROM_NAME_OFFSET + i] = nameEncoded[i];
+    }
+
+    // Sender flags
+    m_letterData[LTR_SENDER_FLAGS_OFFSET] = static_cast<char>(m_senderFlags & 0xFF);
+    m_letterData[LTR_SENDER_FLAGS_OFFSET + 1] = static_cast<char>((m_senderFlags >> 8) & 0xFF);
+    m_letterData[LTR_SENDER_FLAGS_OFFSET + 2] = static_cast<char>((m_senderFlags >> 16) & 0xFF);
+    m_letterData[LTR_SENDER_FLAGS_OFFSET + 3] = static_cast<char>((m_senderFlags >> 24) & 0xFF);
+}
+
+void Backend::writeMetadataToData() {
+    if (m_letterData.size() < LTR_FILE_SIZE) initLetterData();
+
+    m_letterData[LTR_NAME_POS_OFFSET] = static_cast<char>(m_namePosition);
+    m_letterData[LTR_PAPER_OFFSET] = static_cast<char>(m_currentPaper & 0x3F);
+    m_letterData[LTR_ICON_FLAGS_OFFSET] = static_cast<char>(m_letterIconFlags);
+    m_letterData[LTR_LETTER_SOURCE_OFFSET] = static_cast<char>(m_letterSource);
+    m_letterData[LTR_ITEM_OFFSET] = static_cast<char>(m_attachedItem & 0xFF);
+    m_letterData[LTR_ITEM_OFFSET + 1] = static_cast<char>((m_attachedItem >> 8) & 0xFF);
+}
+
+void Backend::syncLetterDataFromUI() {
+    initLetterData();
+
+    // Parse letter text into sections
+    int firstNewline = m_letterText.indexOf('\n');
+    int lastNewline = m_letterText.lastIndexOf('\n');
+
+    QString greeting, body, signature;
+    if (firstNewline < 0) {
+        greeting = m_letterText;
+    } else if (firstNewline == lastNewline) {
+        greeting = m_letterText.left(firstNewline);
+        body = m_letterText.mid(firstNewline + 1);
+    } else {
+        greeting = m_letterText.left(firstNewline);
+        body = m_letterText.mid(firstNewline + 1, lastNewline - firstNewline - 1);
+        signature = m_letterText.mid(lastNewline + 1);
+    }
+
+    writeGreetingToData(greeting);
+    writeBodyToData(body);
+    writeSignatureToData(signature);
+    writeRecipientToData();
+    writeSenderToData();
+    writeMetadataToData();
+}
+
+void Backend::syncUIFromLetterData() {
+    if (m_letterData.size() < LTR_FILE_SIZE) return;
+
+    // Decode recipient info
+    m_recipientTownId = static_cast<uint8_t>(m_letterData[LTR_TO_TOWN_ID_OFFSET]) |
+                        (static_cast<uint8_t>(m_letterData[LTR_TO_TOWN_ID_OFFSET + 1]) << 8);
+    m_recipientTown = decodeAcwwText(m_letterData.mid(LTR_TO_TOWN_OFFSET, 8));
+    m_recipientPlayerId = static_cast<uint8_t>(m_letterData[LTR_TO_PLAYER_ID_OFFSET]) |
+                          (static_cast<uint8_t>(m_letterData[LTR_TO_PLAYER_ID_OFFSET + 1]) << 8);
+    m_recipientName = decodeAcwwText(m_letterData.mid(LTR_TO_NAME_OFFSET, 8));
+
+    // Decode sender info
+    m_senderTownId = static_cast<uint8_t>(m_letterData[LTR_FROM_TOWN_ID_OFFSET]) |
+                     (static_cast<uint8_t>(m_letterData[LTR_FROM_TOWN_ID_OFFSET + 1]) << 8);
+    m_senderTown = decodeAcwwText(m_letterData.mid(LTR_FROM_TOWN_OFFSET, 8));
+    m_senderPlayerId = static_cast<uint8_t>(m_letterData[LTR_FROM_PLAYER_ID_OFFSET]) |
+                       (static_cast<uint8_t>(m_letterData[LTR_FROM_PLAYER_ID_OFFSET + 1]) << 8);
+    m_senderName = decodeAcwwText(m_letterData.mid(LTR_FROM_NAME_OFFSET, 8));
+
+    // Decode flags
+    m_receiverFlags = static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET]) |
+                      (static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 1]) << 8) |
+                      (static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 2]) << 16) |
+                      (static_cast<uint8_t>(m_letterData[LTR_RECEIVER_FLAGS_OFFSET + 3]) << 24);
+    m_senderFlags = static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET]) |
+                    (static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 1]) << 8) |
+                    (static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 2]) << 16) |
+                    (static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 3]) << 24);
+
+    // Decode letter content - greeting is the raw template WITHOUT name inserted
+    QString greeting = decodeAcwwText(m_letterData.mid(LTR_SUBJECT_OFFSET, LTR_SUBJECT_SIZE));
+    QString body = decodeAcwwText(m_letterData.mid(LTR_BODY_OFFSET, LTR_BODY_SIZE));
+    QString signature = decodeAcwwText(m_letterData.mid(LTR_SIGNATURE_OFFSET, LTR_SIGNATURE_SIZE));
+
+    // Decode metadata
+    m_namePosition = static_cast<uint8_t>(m_letterData[LTR_NAME_POS_OFFSET]);
+    m_currentPaper = static_cast<uint8_t>(m_letterData[LTR_PAPER_OFFSET]) & 0x3F;
+    m_letterIconFlags = static_cast<uint8_t>(m_letterData[LTR_ICON_FLAGS_OFFSET]);
+    m_letterSource = static_cast<uint8_t>(m_letterData[LTR_LETTER_SOURCE_OFFSET]);
+    m_attachedItem = static_cast<uint8_t>(m_letterData[LTR_ITEM_OFFSET]) |
+                     (static_cast<uint8_t>(m_letterData[LTR_ITEM_OFFSET + 1]) << 8);
+
+    // The name is NOT inserted into the greeting text - it's rendered visually only
+    // m_namePosition indicates where the name should appear during rendering
+    // Clamp namePosition to valid range
+    if (m_namePosition > greeting.length()) {
+        m_namePosition = static_cast<uint8_t>(greeting.length());
+    }
+
+    // Store sections - greeting is the raw template (no name)
+    m_letterHeader = greeting;
+    m_letterBody = body;
+    m_letterFooter = signature;
+
+    // Build combined text - also without name (it's visual only)
+    m_letterText = greeting + "\n" + body + "\n" + signature;
+
+    // recipientNameStart/End are now just used for visual rendering, not text editing
+    // They indicate where the name appears visually in the rendered output
+    m_recipientNameStart = m_namePosition;
+    m_recipientNameEnd = m_namePosition + m_recipientName.length();
 }

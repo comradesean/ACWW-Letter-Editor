@@ -37,8 +37,8 @@ namespace LetterFormat {
     // Metadata
     constexpr int NAME_POS_OFFSET = 0xEC;        // 1 byte - intro index
     constexpr int STATIONERY_OFFSET = 0xED;      // 1 byte (0-63) - paper ID
-    constexpr int STATUS_OFFSET = 0xEE;          // 1 byte (flags)
-    constexpr int ORIGIN_OFFSET = 0xEF;          // 1 byte (letter origin type)
+    constexpr int ICON_FLAGS_OFFSET = 0xEE;       // 1 byte (icon/flags)
+    constexpr int LETTER_SOURCE_OFFSET = 0xEF;   // 1 byte (letter source type)
     constexpr int ITEM_OFFSET = 0xF0;            // 2 bytes (attached item, little-endian)
 
     // Name/town sizes
@@ -46,15 +46,15 @@ namespace LetterFormat {
     constexpr int TOWN_SIZE = 8;
 }
 
-// Letter status values
-namespace LetterStatus {
+// Letter icon/flags values
+namespace LetterIconFlags {
     constexpr uint8_t UNREAD = 0x42;
     constexpr uint8_t OPENED = 0x03;
     constexpr uint8_t BOTTLE_OPENED = 0x06;
 }
 
-// Letter origin type values
-namespace LetterOrigin {
+// Letter source type values
+namespace LetterSource {
     constexpr uint8_t WRITTEN = 0x00;
     constexpr uint8_t NINTENDO = 0x11;
     constexpr uint8_t BOTTLE = 0x0C;
@@ -83,8 +83,8 @@ struct Letter {
     // Metadata
     uint8_t namePosition = 0;     // Where to insert recipient name in greeting
     uint8_t stationeryType = 0;   // Paper ID (0-63)
-    uint8_t status = LetterStatus::UNREAD;
-    uint8_t originType = LetterOrigin::WRITTEN;
+    uint8_t iconFlags = LetterIconFlags::UNREAD;
+    uint8_t letterSource = LetterSource::WRITTEN;
     uint16_t attachedItem = 0;
 
     // Check if the letter slot is empty (all zeros or no content)

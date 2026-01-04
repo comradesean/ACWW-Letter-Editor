@@ -37,9 +37,9 @@ inline const char* acwwCharTable[256] = {
     "'", "'", """, """, "•", "–", "—", "˜", "™", "›", " ", "¡", "¢", "£", "¤", "¥",
     // 0xC0-0xCF: Currency, legal, fractions
     "¦", "§", "¨", "©", "ª", "«", "¬", "-", "®", "¯", "°", "±", "²", "³", "´", "µ",
-    // 0xD0-0xDF: More special chars, droplet, star, heart, music note
+    // 0xD0-0xDF: More special chars, droplet, star, music note, heart
     // Note: 0xDC uses PUA U+E000 internally, mapped to 💧 emoji for display
-    "¶", "·", "¸", "¹", "º", "»", "¼", "½", "¾", "¿", "×", "÷", "\xEE\x80\x80", "★", "❤", "♪",
+    "¶", "·", "¸", "¹", "º", "»", "¼", "½", "¾", "¿", "×", "÷", "\xEE\x80\x80", "★", "♪", "❤",
     // 0xE0-0xEF: Unused/reserved
     " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",
     // 0xF0-0xFF: Unused/reserved

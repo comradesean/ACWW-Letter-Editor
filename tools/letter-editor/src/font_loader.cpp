@@ -175,20 +175,21 @@ void FontLoader::buildCharacterMap() {
     m_charMap[0x203E] = {false, 0xAF};  // ‾ OVERLINE (using macron ¯ as substitute)
 
     // Map special characters from fontASub
-    // fontASub glyph layout (verified by testing):
+    // fontASub glyph layout (0x20-based, in order):
     //   0x20 = space/empty
     //   0x21 = water droplet 💧
-    //   0x22 = return symbol
-    //   0x23 = x symbol
+    //   0x22 = return/enter block
+    //   0x23 = x block
     //   0x24 = star ★
-    //   0x25 = right arrow
-    //   0x26 = music note ♪
-    //   0x27 = heart ❤
+    //   0x25 = right arrow block
+    //   0x26 = heart ❤
+    //   0x27 = music note ♪
     if (!m_subGlyphs.empty()) {
         // Map Unicode special characters to fontASub glyph codes
         m_charMap[0x2605] = {true, 0x24};   // ★ BLACK STAR
-        m_charMap[0x266A] = {true, 0x26};   // ♪ EIGHTH NOTE
-        m_charMap[0x2764] = {true, 0x27};   // ❤ HEAVY BLACK HEART
+        m_charMap[0x2764] = {true, 0x26};   // ❤ HEAVY BLACK HEART
+        m_charMap[0x2665] = {true, 0x26};   // ♥ BLACK HEART SUIT (alias for ❤)
+        m_charMap[0x266A] = {true, 0x27};   // ♪ EIGHTH NOTE
         m_charMap[0xE000] = {true, 0x21};   // 💧 DROPLET (stored as PUA U+E000)
         m_charMap[0x1F4A7] = {true, 0x21};  // 💧 DROPLET (for paste detection)
 

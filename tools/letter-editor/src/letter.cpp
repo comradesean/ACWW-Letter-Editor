@@ -100,7 +100,8 @@ QByteArray Letter::toBytes() const {
     // Write metadata
     data[LetterFormat::NAME_POS_OFFSET] = static_cast<char>(namePosition);
     data[LetterFormat::STATIONERY_OFFSET] = static_cast<char>(stationeryType & 0x3F);
-    data[LetterFormat::STATUS_OFFSET] = static_cast<char>(status);
+    data[LetterFormat::ICON_FLAGS_OFFSET] = static_cast<char>(iconFlags);
+    data[LetterFormat::LETTER_SOURCE_OFFSET] = static_cast<char>(letterSource);
     writeU16LE(data, LetterFormat::ITEM_OFFSET, attachedItem);
 
     return data;
@@ -140,7 +141,8 @@ Letter Letter::fromBytes(const QByteArray& data) {
     // Read metadata
     letter.namePosition = static_cast<uint8_t>(data[LetterFormat::NAME_POS_OFFSET]);
     letter.stationeryType = static_cast<uint8_t>(data[LetterFormat::STATIONERY_OFFSET]) & 0x3F;
-    letter.status = static_cast<uint8_t>(data[LetterFormat::STATUS_OFFSET]);
+    letter.iconFlags = static_cast<uint8_t>(data[LetterFormat::ICON_FLAGS_OFFSET]);
+    letter.letterSource = static_cast<uint8_t>(data[LetterFormat::LETTER_SOURCE_OFFSET]);
     letter.attachedItem = readU16LE(data, LetterFormat::ITEM_OFFSET);
 
     return letter;

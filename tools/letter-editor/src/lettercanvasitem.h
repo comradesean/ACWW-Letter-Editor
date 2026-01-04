@@ -82,8 +82,8 @@ public:
     Q_INVOKABLE void newLine();
     Q_INVOKABLE void clearText();
     Q_INVOKABLE void handleClick(qreal x, qreal y);
+    Q_INVOKABLE void handleDoubleClick(qreal x, qreal y);
     Q_INVOKABLE void setLetterContent(const QString& header, const QString& body, const QString& footer);
-    Q_INVOKABLE int calculateHeaderWidth(const QString& newRecipientName) const;
 
 signals:
     void backendChanged();
@@ -106,10 +106,9 @@ private:
                     int cursorCol, const FontLoader& font, bool rightAlign,
                     const QColor& textColor, int selStart = -1, int selEnd = -1,
                     const QColor& selectionColor = QColor());
-    void renderLineWithRecipient(QPainter* painter, const QString& text, int x, int y,
-                                  int cursorCol, const FontLoader& font,
+    void renderLineWithRecipient(QPainter* painter, int y,
+                                  int cursorVisualPos, const FontLoader& font,
                                   const QColor& textColor, const QColor& recipientColor,
-                                  int recipientStart, int recipientEnd,
                                   int selStart = -1, int selEnd = -1,
                                   const QColor& selectionColor = QColor());
 
@@ -129,7 +128,20 @@ private:
     int findCharPosAtX(const QString& text, int targetX, int startX, const FontLoader& font) const;
 
     // Convert widget coordinates to section and position
-    void charPosFromPoint(qreal x, qreal y, int& outSection, int& outPosInSection) const;
+    // outClickedName is set to true if the click was on the recipient name
+    void charPosFromPoint(qreal x, qreal y, int& outSection, int& outPosInSection, bool* outClickedName = nullptr) const;
+
+    // Check if current selection includes the visually rendered recipient name
+    bool selectionIncludesName() const;
+
+    // Build unified visual glyph list for header (template + name as individual chars)
+    QVector<VisualGlyph> buildHeaderVisualGlyphs() const;
+
+    // Convert header visual cursor position to template position
+    int headerVisualToTemplatePos(int visualPos) const;
+
+    // Convert header template position to visual position
+    int headerTemplateToVisualPos(int templatePos) const;
 
     Backend* m_backend = nullptr;
 
@@ -140,7 +152,7 @@ private:
 
     // Section-aware cursor
     int m_currentSection = 0;      // 0=header, 1=body, 2=footer
-    int m_cursorPosInSection = 0;
+    int m_cursorPosInSection = 0;  // Visual position for header (includes name chars), template position for body/footer
 
     // Section-aware selection (constrained to single section)
     int m_selectionSection = -1;
