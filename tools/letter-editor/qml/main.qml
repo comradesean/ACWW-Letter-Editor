@@ -572,10 +572,15 @@ ApplicationWindow {
                                                         backend.recipientTownId = 0
                                                         backend.recipientNameStart = -1
                                                         backend.recipientNameEnd = -1
+                                                        backend.receiverFlags = 0
                                                         backend.senderName = ""
                                                         backend.senderTown = ""
                                                         backend.senderPlayerId = 0
                                                         backend.senderTownId = 0
+                                                        backend.senderFlags = 0
+                                                        backend.letterSource = 0
+                                                        backend.letterIconFlags = 0
+                                                        backend.namePosition = 0  // TODO: verify 0 is the correct default
                                                         backend.attachedItem = 0xFFF1
                                                     } else if (actionId === "editLetterInfo") {
                                                         letterInfoDialog.selectedTab = 0
