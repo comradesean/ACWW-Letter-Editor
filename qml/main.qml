@@ -205,10 +205,34 @@ ApplicationWindow {
         target: backend
         function onSaveLoadedChanged() {
             if (backend.saveLoaded) {
-                // Load slot 1 content into canvas
-                canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
-                paperCombo.currentIndex = backend.currentPaper
-                dirtyState.capture()
+                // Validate save file has players
+                if (!saveBrowser.hasAnyPlayers()) {
+                    noPlayersDialog.open()
+                    return
+                }
+
+                // Find first letter in save across all players/storages
+                var firstLetter = saveBrowser.findFirstLetterInSave()
+                if (firstLetter) {
+                    // Found a letter - initialize to that location
+                    saveBrowser.initializeToLocation(firstLetter.player, firstLetter.storage, firstLetter.slot)
+                    canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                    paperCombo.currentIndex = backend.currentPaper
+                    dirtyState.capture()
+                } else {
+                    // No letters in save - ask if user wants to create one
+                    var location = saveBrowser.getFirstAvailableLocation()
+                    if (location) {
+                        createLetterDialog.pendingSlot = 0
+                        createLetterDialog.pendingPlayer = location.player
+                        createLetterDialog.pendingStorage = location.storage
+                        createLetterDialog.slotNumber = 1
+                        createLetterDialog.isStorageEmpty = false
+                        createLetterDialog.isSaveEmpty = true
+                        createLetterDialog.storageName = location.storageName
+                        createLetterDialog.open()
+                    }
+                }
             } else {
                 // Clear canvas when save is closed
                 canvas.clearText()
@@ -755,6 +779,20 @@ ApplicationWindow {
                         dirtyState.check()
                         dirtyState.confirmDiscard(function() {
                             saveBrowser.changePlayer(newPlayer)
+                        })
+                    }
+
+                    // Handle empty slot click - show create letter dialog
+                    onRequestEmptySlotChange: function(newSlot, isStorageEmpty, prevPlayer, prevStorage, prevSlot) {
+                        dirtyState.check()
+                        dirtyState.confirmDiscard(function() {
+                            createLetterDialog.slotNumber = newSlot + 1
+                            createLetterDialog.pendingSlot = newSlot
+                            createLetterDialog.isStorageEmpty = isStorageEmpty
+                            createLetterDialog.prevPlayer = prevPlayer
+                            createLetterDialog.prevStorage = prevStorage
+                            createLetterDialog.prevSlot = prevSlot
+                            createLetterDialog.open()
                         })
                     }
                 }
@@ -1599,6 +1637,10 @@ ApplicationWindow {
                 canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
                 paperCombo.currentIndex = backend.currentPaper
                 canvas.forceActiveFocus()
+                // If a save file is loaded, ask if user wants to readdress to themselves
+                if (backend.saveLoaded) {
+                    readdressLetterDialog.open()
+                }
             }
         }
     }
@@ -2785,6 +2827,118 @@ ApplicationWindow {
 
         onCancelled: {
             pendingAction = null
+        }
+    }
+
+    // Create Letter Dialog (for empty slots)
+    CreateLetterDialog {
+        id: createLetterDialog
+        anchors.centerIn: parent
+
+        property int pendingSlot: 0
+        property int pendingPlayer: -1
+        property int pendingStorage: -1
+        // Previous location for reverting on cancel
+        property int prevPlayer: -1
+        property int prevStorage: -1
+        property int prevSlot: -1
+
+        // Pass colors
+        bgBase: window.bgBase
+        bgElevated: window.bgElevated
+        bgHover: window.bgHover
+        accentPrimary: window.accentPrimary
+        accentGreen: window.accentGreen
+        textPrimary: window.textPrimary
+        textSecondary: window.textSecondary
+        textMuted: window.textMuted
+        divider: window.divider
+
+        onConfirmed: {
+            if (isSaveEmpty && pendingPlayer >= 0 && pendingStorage >= 0) {
+                // Save was empty - initialize to specified location and create letter
+                saveBrowser.initializeAndCreateLetter(pendingPlayer, pendingStorage)
+                canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                paperCombo.currentIndex = backend.currentPaper
+                dirtyState.capture()
+            } else {
+                saveBrowser.createLetterInSlot(pendingSlot)
+            }
+            // Reset state
+            resetState()
+        }
+
+        onCancelled: {
+            if (isSaveEmpty) {
+                // User declined to create letter in empty save - close save file
+                backend.closeSave()
+            } else if (isStorageEmpty && prevPlayer >= 0 && prevStorage >= 0 && prevSlot >= 0) {
+                // User declined to create letter in empty storage - revert to previous location
+                saveBrowser.revertToLocation(prevPlayer, prevStorage, prevSlot)
+                canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                paperCombo.currentIndex = backend.currentPaper
+            }
+            // Reset state
+            resetState()
+        }
+
+        function resetState() {
+            pendingPlayer = -1
+            pendingStorage = -1
+            prevPlayer = -1
+            prevStorage = -1
+            prevSlot = -1
+            isSaveEmpty = false
+            isStorageEmpty = false
+        }
+    }
+
+    // No Players Dialog (for save files without any players)
+    NoPlayersDialog {
+        id: noPlayersDialog
+        anchors.centerIn: parent
+
+        // Pass colors
+        bgBase: window.bgBase
+        bgElevated: window.bgElevated
+        bgHover: window.bgHover
+        accentPrimary: window.accentPrimary
+        errorColor: window.errorColor
+        textPrimary: window.textPrimary
+        textSecondary: window.textSecondary
+        divider: window.divider
+
+        onAcknowledged: {
+            backend.closeSave()
+        }
+    }
+
+    // Readdress Letter Dialog (shown after importing a letter when save is loaded)
+    ReaddressLetterDialog {
+        id: readdressLetterDialog
+        anchors.centerIn: parent
+
+        // Pass colors
+        bgBase: window.bgBase
+        bgElevated: window.bgElevated
+        bgHover: window.bgHover
+        accentPrimary: window.accentPrimary
+        accentGreen: window.accentGreen
+        textPrimary: window.textPrimary
+        textSecondary: window.textSecondary
+        textMuted: window.textMuted
+        divider: window.divider
+
+        onAccepted: {
+            // Readdress the letter to the current player from save
+            backend.importAddresseeFromSave()
+            // Update canvas to reflect changes
+            canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+            dirtyState.check()
+        }
+
+        onDeclined: {
+            // Keep the letter as-is (1:1 hex)
         }
     }
 

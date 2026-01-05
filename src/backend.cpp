@@ -1294,44 +1294,77 @@ void Backend::syncUIFromLetterData() {
     m_senderRelation = static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 2]);
     m_senderUnknown2 = static_cast<uint8_t>(m_letterData[LTR_SENDER_FLAGS_OFFSET + 3]);
 
-    // Warn if unknown bytes have unexpected values
-    QString reportMsg = " - Please export this letter and report to GitHub with a summary of the letter's origin.";
-    if (m_recipientUnknown1 != 0) {
-        emit unknownByteWarning(QString("Recipient Unknown1 (0x19) has unexpected value: 0x%1%2").arg(m_recipientUnknown1, 2, 16, QChar('0')).toUpper().arg(reportMsg));
-    }
-    if (m_recipientUnknown2 != 0) {
-        emit unknownByteWarning(QString("Recipient Unknown2 (0x1B) has unexpected value: 0x%1%2").arg(m_recipientUnknown2, 2, 16, QChar('0')).toUpper().arg(reportMsg));
-    }
-    if (m_senderUnknown1 != 0) {
-        emit unknownByteWarning(QString("Sender Unknown1 (0x31) has unexpected value: 0x%1%2").arg(m_senderUnknown1, 2, 16, QChar('0')).toUpper().arg(reportMsg));
-    }
-    if (m_senderUnknown2 != 0) {
-        emit unknownByteWarning(QString("Sender Unknown2 (0x33) has unexpected value: 0x%1%2").arg(m_senderUnknown2, 2, 16, QChar('0')).toUpper().arg(reportMsg));
-    }
+    // Check if this is an uninitialized/empty letter slot
+    // Empty slots match one of these patterns:
+    // 1. All 0x00 except bytes 240-241 set to 0xF1 0xFF (no item marker)
+    // 2. All 0x00
+    // 3. All 0xFF (uninitialized)
+    auto isEmptySlot = [this]() -> bool {
+        if (m_letterData.size() < LTR_FILE_SIZE) return false;
 
-    // Check for unknown flag values not in our dropdowns
-    // Recipient: known values are 1 (Future Self), 2 (Player), 3 (Villager), 5 (Green Letter), 6 (Bottle Sys), 7 (Bottle Vlgr)
-    if (m_recipientRelation != 1 && m_recipientRelation != 2 && m_recipientRelation != 3 &&
-        m_recipientRelation != 5 && m_recipientRelation != 6 && m_recipientRelation != 7) {
-        emit unknownByteWarning(QString("Unknown Recipient Flag value: 0x%1%2")
-            .arg(m_recipientRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
-    }
-    // Sender: known values are 2 (Player/WFC), 3 (Villager), 4 (System)
-    if (m_senderRelation != 2 && m_senderRelation != 3 && m_senderRelation != 4) {
-        emit unknownByteWarning(QString("Unknown Sender Flag value: 0x%1%2")
-            .arg(m_senderRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
-    }
+        bool allZero = true;
+        bool allFF = true;
+        bool zeroWithNoItem = true;
 
-    // Check for unexpected gender/flag combinations
-    // Recipient: female (0x01) should only occur with Future Self (0x01) or Player (0x02)
-    if (m_recipientGender == 1 && m_recipientRelation != 1 && m_recipientRelation != 2) {
-        emit unknownByteWarning(QString("Unexpected combination: Recipient Gender is Female (0x01) with Flag 0x%1%2")
-            .arg(m_recipientRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
-    }
-    // Sender: female (0x01) should only occur with Player/WFC (0x02)
-    if (m_senderGender == 1 && m_senderRelation != 2) {
-        emit unknownByteWarning(QString("Unexpected combination: Sender Gender is Female (0x01) with Flag 0x%1%2")
-            .arg(m_senderRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+        for (int i = 0; i < LTR_FILE_SIZE; i++) {
+            uint8_t byte = static_cast<uint8_t>(m_letterData[i]);
+
+            if (byte != 0x00) allZero = false;
+            if (byte != 0xFF) allFF = false;
+
+            // Check for pattern: all 0x00 except 0xF1 at offset 240, 0xFF at offset 241
+            if (i == 240) {
+                if (byte != 0xF1 && byte != 0x00) zeroWithNoItem = false;
+            } else if (i == 241) {
+                if (byte != 0xFF && byte != 0x00) zeroWithNoItem = false;
+            } else {
+                if (byte != 0x00) zeroWithNoItem = false;
+            }
+        }
+
+        return allZero || allFF || zeroWithNoItem;
+    }();
+
+    // Warn if unknown bytes have unexpected values (only for non-empty slots)
+    if (!isEmptySlot) {
+        QString reportMsg = " - Please export this letter and report to GitHub with a summary of the letter's origin.";
+        if (m_recipientUnknown1 != 0) {
+            emit unknownByteWarning(QString("Recipient Unknown1 (0x19) has unexpected value: 0x%1%2").arg(m_recipientUnknown1, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+        }
+        if (m_recipientUnknown2 != 0) {
+            emit unknownByteWarning(QString("Recipient Unknown2 (0x1B) has unexpected value: 0x%1%2").arg(m_recipientUnknown2, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+        }
+        if (m_senderUnknown1 != 0) {
+            emit unknownByteWarning(QString("Sender Unknown1 (0x31) has unexpected value: 0x%1%2").arg(m_senderUnknown1, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+        }
+        if (m_senderUnknown2 != 0) {
+            emit unknownByteWarning(QString("Sender Unknown2 (0x33) has unexpected value: 0x%1%2").arg(m_senderUnknown2, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+        }
+
+        // Check for unknown flag values not in our dropdowns
+        // Recipient: known values are 1 (Future Self), 2 (Player), 3 (Villager), 5 (Green Letter), 6 (Bottle Sys), 7 (Bottle Vlgr)
+        if (m_recipientRelation != 1 && m_recipientRelation != 2 && m_recipientRelation != 3 &&
+            m_recipientRelation != 5 && m_recipientRelation != 6 && m_recipientRelation != 7) {
+            emit unknownByteWarning(QString("Unknown Recipient Flag value: 0x%1%2")
+                .arg(m_recipientRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+        }
+        // Sender: known values are 2 (Player/WFC), 3 (Villager), 4 (System)
+        if (m_senderRelation != 2 && m_senderRelation != 3 && m_senderRelation != 4) {
+            emit unknownByteWarning(QString("Unknown Sender Flag value: 0x%1%2")
+                .arg(m_senderRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+        }
+
+        // Check for unexpected gender/flag combinations
+        // Recipient: female (0x01) should only occur with Future Self (0x01) or Player (0x02)
+        if (m_recipientGender == 1 && m_recipientRelation != 1 && m_recipientRelation != 2) {
+            emit unknownByteWarning(QString("Unexpected combination: Recipient Gender is Female (0x01) with Flag 0x%1%2")
+                .arg(m_recipientRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+        }
+        // Sender: female (0x01) should only occur with Player/WFC (0x02)
+        if (m_senderGender == 1 && m_senderRelation != 2) {
+            emit unknownByteWarning(QString("Unexpected combination: Sender Gender is Female (0x01) with Flag 0x%1%2")
+                .arg(m_senderRelation, 2, 16, QChar('0')).toUpper().arg(reportMsg));
+        }
     }
 
     // Decode letter content - greeting is the raw template WITHOUT name inserted

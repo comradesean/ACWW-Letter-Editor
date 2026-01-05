@@ -90,6 +90,7 @@ class Backend : public QObject {
     Q_PROPERTY(QString saveFilePath READ saveFilePath NOTIFY saveLoadedChanged)
     Q_PROPERTY(QString saveRegion READ saveRegion NOTIFY saveLoadedChanged)
     Q_PROPERTY(bool saveModified READ isSaveModified NOTIFY saveModifiedChanged)
+    Q_PROPERTY(bool bankInitialized READ isBankInitialized NOTIFY saveLoadedChanged)
     Q_PROPERTY(int currentPlayer READ currentPlayer WRITE setCurrentPlayer NOTIFY currentPlayerChanged)
     Q_PROPERTY(int currentStorageType READ currentStorageType WRITE setCurrentStorageType NOTIFY currentStorageTypeChanged)
     Q_PROPERTY(int currentSlot READ currentSlot WRITE setCurrentSlot NOTIFY currentSlotChanged)
@@ -140,6 +141,7 @@ public:
     QString saveFilePath() const { return m_saveFile.filePath(); }
     QString saveRegion() const { return m_saveFile.regionName(); }
     bool isSaveModified() const { return m_saveFile.isModified(); }
+    bool isBankInitialized() const { return m_saveFile.isBankInitialized(); }
     int currentPlayer() const { return m_currentPlayer; }
     int currentStorageType() const { return m_currentStorageType; }
     int currentSlot() const { return m_currentSlot; }

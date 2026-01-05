@@ -5,5 +5,8 @@
         <file>qml/components/SlotDelegate.qml</file>
         <file>qml/components/StatusBar.qml</file>
         <file>qml/dialogs/UnsavedChangesDialog.qml</file>
+        <file>qml/dialogs/CreateLetterDialog.qml</file>
+        <file>qml/dialogs/NoPlayersDialog.qml</file>
+        <file>qml/dialogs/ReaddressLetterDialog.qml</file>
     </qresource>
 </RCC>

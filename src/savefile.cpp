@@ -241,6 +241,27 @@ QString SaveFile::regionName() const {
     }
 }
 
+bool SaveFile::isBankInitialized() const {
+    if (!m_loaded) return false;
+
+    // Bank storage range: 0x2E20C to 0x3FFFB
+    // If all bytes in this range are 0xFF, the bank is uninitialized
+    static constexpr uint32_t BANK_START = 0x2E20C;
+    static constexpr uint32_t BANK_END = 0x3FFFB;
+
+    if (BANK_END >= static_cast<uint32_t>(m_data.size())) {
+        return false;
+    }
+
+    for (uint32_t offset = BANK_START; offset <= BANK_END; offset++) {
+        if (static_cast<uint8_t>(m_data[offset]) != 0xFF) {
+            return true;  // Found non-0xFF byte, bank is initialized
+        }
+    }
+
+    return false;  // All 0xFF, bank is uninitialized
+}
+
 QString SaveFile::getPlayerName(int player) const {
     if (!m_loaded || player < 0 || player >= PLAYER_COUNT) {
         return QString();
@@ -260,13 +281,17 @@ bool SaveFile::playerExists(int player) const {
         return false;
     }
 
-    // Check if player has a non-empty name OR a valid player ID
-    // Player ID of 0 typically means the slot is unused
+    // Check if player has a non-empty name AND a valid player ID
+    // Player ID of 0 means the slot is unused (zeroed)
+    // Player ID of 0xFFFF means the slot is uninitialized
     QString name = getPlayerName(player);
     int playerId = getPlayerId(player);
 
-    // A player exists if they have a name or a non-zero player ID
-    return !name.isEmpty() || playerId != 0;
+    // A player exists if they have a valid player ID (not 0 or 0xFFFF)
+    // OR if they have a non-empty name (covers edge cases)
+    bool validPlayerId = (playerId != 0 && playerId != 0xFFFF);
+
+    return validPlayerId || !name.isEmpty();
 }
 
 QStringList SaveFile::getPlayerNames() const {
