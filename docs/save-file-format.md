@@ -347,24 +347,26 @@ Letters stored at the town hall post office (75 slots per player, organized as 3
 #### Address Calculation
 
 ```
-player_base = 0x2E20C + (player_index * 0x4778)
+player_base = 0x2E20C + (player_index * 0x477C)
 slot_address = player_base + (slot_index * 0xF4)
 ```
 
 Where:
 - `player_index` = 0-3 (for Players 1-4)
 - `slot_index` = 0-74 (for slots 1-75)
-- `0x4778` = player stride (18,296 bytes between players)
+- `0x477C` = player stride (18,300 bytes = 75 slots * 244 bytes per letter)
 - `0xF4` = letter size (244 bytes)
+
+**Note:** There is no padding between players - each player's data proceeds directly into the next.
 
 #### Summary Table
 
 | Player | Address Range |
 |--------|---------------|
 | Player 1 | `0x2E20C` - `0x32987` |
-| Player 2 | `0x32984` - `0x370FB` |
-| Player 3 | `0x370FC` - `0x3B873` |
-| Player 4 | `0x3B874` - `0x3FFEB` |
+| Player 2 | `0x32988` - `0x37103` |
+| Player 3 | `0x37104` - `0x3B87F` |
+| Player 4 | `0x3B880` - `0x3FFFB` |
 
 #### Player 1 Bank Storage
 
@@ -457,6 +459,21 @@ Where:
 | 73 | `0x326AC` | `0x3279F` |
 | 74 | `0x327A0` | `0x32893` |
 | 75 | `0x32894` | `0x32987` |
+
+#### Bank Storage Initialization States
+
+Bank letter slots have unique initialization behavior compared to Inventory and Mailbox slots:
+
+| State | Bank Slots | Inventory/Mailbox Slots |
+|-------|------------|------------------------|
+| **Fresh save** | Filled with `0xFF` bytes | Zeroed out with `0xFFF1` attachment |
+| **After first bank access** | Completely zeroed out (`0x00`) | (unchanged) |
+| **After letter removed** | Zeroed out with `0xFFF1` attachment | Zeroed out with `0xFFF1` attachment |
+
+**Notes:**
+- **Fresh save**: Bank slots start completely `0xFF`'d out. The bank has a secondary save mechanism that is independent of the main game save.
+- **Initialization save**: When the player first accesses the post office bank, all 75 slots are initialized to all zeros (`0x00`).
+- **Empty letter format (after removal)**: Inventory and Mailbox slots always use the "empty letter" format: all zeros with `0xFFF1` at the attachment field (offset `0xF0`). Bank slots only follow this format after a letter has been stored in a slot and then removed - not upon initial bank access.
 
 ---
 
