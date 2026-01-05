@@ -993,6 +993,34 @@ void Backend::importAddresseeFromSave() {
              << ", Gender:" << m_recipientGender << ")";
 }
 
+void Backend::importSenderFromSave() {
+    if (!m_saveFile.isLoaded()) {
+        qDebug() << "Backend::importSenderFromSave: No save file loaded";
+        return;
+    }
+
+    // Get player info from current player in save file
+    m_senderName = m_saveFile.getPlayerName(m_currentPlayer);
+    m_senderTown = m_saveFile.getPlayerTown(m_currentPlayer);
+    m_senderPlayerId = m_saveFile.getPlayerId(m_currentPlayer);
+    m_senderTownId = m_saveFile.getTownId(m_currentPlayer);
+
+    // Set sender flag to Player (2) and import gender from save
+    m_senderRelation = 2;  // Player
+    m_senderGender = m_saveFile.getPlayerGender(m_currentPlayer);  // 0=male, 1=female
+
+    // Update the sender in the raw letter data
+    writeSenderToData();
+
+    emit senderInfoChanged();
+    emit letterMetadataChanged();
+
+    qDebug() << "Backend::importSenderFromSave: Imported"
+             << m_senderName << "from" << m_senderTown
+             << "(Player ID:" << m_senderPlayerId << ", Town ID:" << m_senderTownId
+             << ", Gender:" << m_senderGender << ")";
+}
+
 bool Backend::playerExists(int player) const {
     if (!m_saveFile.isLoaded()) {
         return false;

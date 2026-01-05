@@ -16,7 +16,7 @@ ApplicationWindow {
     height: 720
     minimumWidth: 580
     minimumHeight: 520
-    title: "Letter Previewer"
+    title: "Animal Crossing Wild World Letter Tool"
     flags: Qt.FramelessWindowHint | Qt.Window
 
     // Modern Color System - Ocean palette
@@ -352,23 +352,17 @@ ApplicationWindow {
                     z: 1
 
                     // App icon
-                    Rectangle {
+                    Image {
                         width: 22
                         height: 22
-                        radius: 6
-                        color: accentPrimary
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "✉"
-                            font.pixelSize: 11
-                            color: "#FFFFFF"
-                        }
+                        source: "qrc:/resources/icon.png"
+                        sourceSize: Qt.size(22, 22)
+                        smooth: true
                     }
 
                     // Title
                     Text {
-                        text: "Letter Previewer"
+                        text: "ACWW Letter Tool"
                         font.pixelSize: 12
                         font.weight: Font.Medium
                         color: textPrimary
@@ -500,6 +494,7 @@ ApplicationWindow {
                                 { text: "Edit Letter Info...", actionId: "editLetterInfo", enabledWhen: "loaded" },
                                 { text: "Edit Attached Item...", actionId: "editAttachedItem", enabledWhen: "loaded" },
                                 { text: "Import Addressee from Save", actionId: "importAddressee", enabledWhen: "saveLoaded" },
+                                { text: "Import Sender from Save", actionId: "importSender", enabledWhen: "saveLoaded" },
                                 { separator: true },
                                 { text: "View Hex...", actionId: "viewHex", enabledWhen: "loaded" },
                                 { separator: true },
@@ -674,6 +669,8 @@ ApplicationWindow {
                                                         backend.importAddresseeFromSave()
                                                         // Update canvas with new header
                                                         canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                                                    } else if (actionId === "importSender") {
+                                                        backend.importSenderFromSave()
                                                     } else if (actionId === "nextPaper") {
                                                         if (backend.loaded && paperCombo.currentIndex < 63)
                                                             paperCombo.currentIndex++
@@ -1610,7 +1607,7 @@ ApplicationWindow {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Letter Previewer"
+                    text: "ACWW Letter Tool"
                     font.pixelSize: 20
                     font.weight: Font.DemiBold
                     color: textPrimary
@@ -1618,7 +1615,7 @@ ApplicationWindow {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Preview and compose letters with original game stationery"
+                    text: "Preview and edit letters with original game stationery"
                     font.pixelSize: 13
                     color: textSecondary
                 }

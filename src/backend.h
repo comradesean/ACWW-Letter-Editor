@@ -201,6 +201,7 @@ public:
     Q_INVOKABLE QVariantList getSlotSummaries() const;
     Q_INVOKABLE void clearLetter();
     Q_INVOKABLE void importAddresseeFromSave();
+    Q_INVOKABLE void importSenderFromSave();
     Q_INVOKABLE bool playerExists(int player) const;
 
     // Item database access for QML

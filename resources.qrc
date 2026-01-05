@@ -8,5 +8,6 @@
         <file>qml/dialogs/CreateLetterDialog.qml</file>
         <file>qml/dialogs/NoPlayersDialog.qml</file>
         <file>qml/dialogs/ReaddressLetterDialog.qml</file>
+        <file>resources/icon.png</file>
     </qresource>
 </RCC>
