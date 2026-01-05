@@ -281,13 +281,17 @@ bool SaveFile::playerExists(int player) const {
         return false;
     }
 
-    // Check if player has a non-empty name OR a valid player ID
-    // Player ID of 0 typically means the slot is unused
+    // Check if player has a non-empty name AND a valid player ID
+    // Player ID of 0 means the slot is unused (zeroed)
+    // Player ID of 0xFFFF means the slot is uninitialized
     QString name = getPlayerName(player);
     int playerId = getPlayerId(player);
 
-    // A player exists if they have a name or a non-zero player ID
-    return !name.isEmpty() || playerId != 0;
+    // A player exists if they have a valid player ID (not 0 or 0xFFFF)
+    // OR if they have a non-empty name (covers edge cases)
+    bool validPlayerId = (playerId != 0 && playerId != 0xFFFF);
+
+    return validPlayerId || !name.isEmpty();
 }
 
 QStringList SaveFile::getPlayerNames() const {

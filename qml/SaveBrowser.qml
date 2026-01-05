@@ -493,19 +493,32 @@ Rectangle {
         var prevSlot = backend.currentSlot
 
         backend.currentPlayer = player
-        slotList.model = backend.getSlotSummaries()
 
-        // Find first non-empty slot
-        var firstSlot = findFirstNonEmptySlot()
-        if (firstSlot >= 0) {
-            backend.currentSlot = firstSlot
-            backend.loadCurrentSlot()
-            modifiedSlot = -1
-            slotSelected(firstSlot)
-        } else {
-            // All slots empty - ask user if they want to create a letter
-            requestEmptySlotChange(0, true, prevPlayer, prevStorage, prevSlot)
+        // Search all storages for first letter for this player
+        var storageTypes = [0, 1, 2]  // Inventory, Mailbox, Bank
+        for (var s = 0; s < storageTypes.length; s++) {
+            var storageType = storageTypes[s]
+            // Skip uninitialized bank
+            if (storageType === 2 && !backend.bankInitialized) continue
+
+            backend.currentStorageType = storageType
+            slotList.model = backend.getSlotSummaries()
+
+            var firstSlot = findFirstNonEmptySlot()
+            if (firstSlot >= 0) {
+                backend.currentSlot = firstSlot
+                backend.loadCurrentSlot()
+                modifiedSlot = -1
+                slotSelected(firstSlot)
+                return
+            }
         }
+
+        // No letters found in any storage - ask user if they want to create a letter
+        // Reset to Inventory for creation
+        backend.currentStorageType = 0
+        slotList.model = backend.getSlotSummaries()
+        requestEmptySlotChange(0, true, prevPlayer, prevStorage, prevSlot)
     }
 
     // Revert to a previous location (used when user cancels empty slot dialog)
