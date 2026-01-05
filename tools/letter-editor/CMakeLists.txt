@@ -36,6 +36,7 @@ set(HEADERS
     src/cloth_loader.h
     src/icon_loader.h
     src/letter_icons.h
+    src/lettericonprovider.h
     src/nds_rom.h
     src/lz77.h
     src/letter.h

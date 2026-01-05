@@ -1105,6 +1105,96 @@ ApplicationWindow {
                     spacing: 10
                     visible: backend.loaded
 
+                    // Opened checkbox with overlay for tooltip on disabled state
+                    Item {
+                        width: letterOpenedCheckbox.width
+                        height: letterOpenedCheckbox.height
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        CheckBox {
+                            id: letterOpenedCheckbox
+                            // Disabled for writing states (0x01 = letter writing, 0x04 = bottle writing)
+                            property int iconType: backend.letterIconFlags & 0x0F
+                            property bool isWritingState: iconType === 0x01 || iconType === 0x04
+                            enabled: !isWritingState
+                            checked: backend.isLetterOpened
+                            onCheckedChanged: {
+                                if (checked !== backend.isLetterOpened) {
+                                    backend.isLetterOpened = checked
+                                }
+                            }
+
+                            indicator: Rectangle {
+                                implicitWidth: 16
+                                implicitHeight: 16
+                                x: letterOpenedCheckbox.leftPadding
+                                y: parent.height / 2 - height / 2
+                                radius: 3
+                                color: letterOpenedCheckbox.enabled
+                                    ? (letterOpenedCheckbox.checked ? accentPrimary : bgHover)
+                                    : Qt.darker(bgHover, 1.3)
+                                border.color: letterOpenedCheckbox.enabled
+                                    ? (letterOpenedCheckbox.checked ? accentPrimary : divider)
+                                    : Qt.darker(divider, 1.3)
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: letterOpenedCheckbox.enabled ? "✓" : "✕"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                    color: letterOpenedCheckbox.enabled ? bgBase : textMuted
+                                    visible: letterOpenedCheckbox.checked || !letterOpenedCheckbox.enabled
+                                }
+                            }
+                            contentItem: Text {
+                                text: "Opened"
+                                font.pixelSize: 12
+                                font.weight: Font.Medium
+                                color: letterOpenedCheckbox.enabled ? textMuted : Qt.darker(textMuted, 1.3)
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: letterOpenedCheckbox.indicator.width + 4
+                            }
+                        }
+
+                        // Invisible mouse area overlay for tooltip on disabled checkbox
+                        MouseArea {
+                            id: openedMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                            propagateComposedEvents: true
+
+                            ToolTip {
+                                visible: letterOpenedCheckbox.isWritingState && openedMouseArea.containsMouse
+                                text: qsTr("Letters being written cannot be marked as opened")
+                                delay: 300
+                                timeout: 5000
+
+                                background: Rectangle {
+                                    color: bgElevated
+                                    radius: 6
+                                    border.color: divider
+                                    border.width: 1
+                                }
+
+                                contentItem: Text {
+                                    text: qsTr("Letters being written cannot be marked as opened")
+                                    font.pixelSize: 12
+                                    color: textPrimary
+                                }
+                            }
+                        }
+                    }
+
+                    // Vertical divider
+                    Rectangle {
+                        width: 1
+                        height: 20
+                        color: divider
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
                     Label {
                         text: "Stationery"
                         font.pixelSize: 12
@@ -2326,6 +2416,62 @@ ApplicationWindow {
                                     color: textPrimary
                                     elide: Text.ElideRight
                                 }
+                            }
+                        }
+                    }
+
+                    // Wrapped gift checkbox
+                    Row {
+                        width: parent.width
+                        spacing: 8
+
+                        CheckBox {
+                            id: wrappedGiftCheckbox
+                            enabled: {
+                                var hex = parseInt(attachedItemDialogField.text, 16)
+                                return !isNaN(hex) && hex !== 0xFFF1
+                            }
+                            checked: backend.isGiftWrapped
+                            onCheckedChanged: {
+                                if (checked !== backend.isGiftWrapped) {
+                                    backend.isGiftWrapped = checked
+                                }
+                            }
+                            onEnabledChanged: {
+                                // When disabled (no item), uncheck and clear wrapped flag
+                                if (!enabled && backend.isGiftWrapped) {
+                                    backend.isGiftWrapped = false
+                                }
+                            }
+                            indicator: Rectangle {
+                                implicitWidth: 18
+                                implicitHeight: 18
+                                x: wrappedGiftCheckbox.leftPadding
+                                y: parent.height / 2 - height / 2
+                                radius: 3
+                                color: wrappedGiftCheckbox.enabled
+                                    ? (wrappedGiftCheckbox.checked ? accentPrimary : bgHover)
+                                    : Qt.darker(bgHover, 1.2)
+                                border.color: wrappedGiftCheckbox.enabled
+                                    ? (wrappedGiftCheckbox.checked ? accentPrimary : divider)
+                                    : Qt.darker(divider, 1.2)
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "✓"
+                                    font.pixelSize: 12
+                                    font.weight: Font.Bold
+                                    color: bgBase
+                                    visible: wrappedGiftCheckbox.checked
+                                }
+                            }
+                            contentItem: Text {
+                                text: "Wrapped Gift"
+                                font.pixelSize: 11
+                                color: wrappedGiftCheckbox.enabled ? textPrimary : textMuted
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: wrappedGiftCheckbox.indicator.width + 6
                             }
                         }
                     }

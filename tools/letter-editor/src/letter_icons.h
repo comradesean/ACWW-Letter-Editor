@@ -76,8 +76,56 @@ constexpr IconDef SPECIAL_OPENED            {48, 2};  // Special delivery, opene
 constexpr IconDef SPECIAL_OPENED_GIFT       {49, 2};  // Special delivery, opened with gift
 
 // =============================================================================
-// Lookup function
+// Icon flag values (from letter offset 0xEE)
 // =============================================================================
+namespace IconFlag {
+    constexpr uint8_t LETTER_WRITING        = 0x01;  // Letter being written
+    constexpr uint8_t LETTER_UNOPENED       = 0x02;  // Received letter, unopened
+    constexpr uint8_t LETTER_OPENED         = 0x03;  // Received letter, opened
+    constexpr uint8_t BOTTLE_WRITING        = 0x04;  // Bottled mail being written
+    constexpr uint8_t BOTTLE_UNOPENED       = 0x05;  // Received bottled mail, unopened
+    constexpr uint8_t BOTTLE_OPENED         = 0x06;  // Received bottled mail, opened
+    constexpr uint8_t SPECIAL_UNOPENED      = 0x07;  // Special delivery, unopened
+    constexpr uint8_t SPECIAL_OPENED        = 0x08;  // Special delivery, opened
+}
+
+// =============================================================================
+// Lookup functions
+// =============================================================================
+
+/**
+ * Get the appropriate icon based on the iconFlags byte (0xEE) and gift status
+ *
+ * @param iconFlags Value from letter offset 0xEE (0x01-0x08 or 0x41-0x48)
+ * @param hasGift   Whether the letter has an attached gift (0xF0 != 0xFFF1)
+ * @return          IconDef with index and palette, or {-1, -1} if invalid
+ *
+ * Note: The upper nibble (0x40) is masked off - both 0x01 and 0x41 map to the same icon
+ */
+constexpr IconDef getIconFromFlags(uint8_t iconFlags, bool hasGift) {
+    // Mask to lower nibble - 0x41-0x48 should display same as 0x01-0x08
+    uint8_t iconType = iconFlags & 0x0F;
+    switch (iconType) {
+        case IconFlag::LETTER_WRITING:
+            return hasGift ? LETTER_WRITING_GIFT : LETTER_WRITING;
+        case IconFlag::LETTER_UNOPENED:
+            return hasGift ? LETTER_UNOPENED_GIFT : LETTER_UNOPENED;
+        case IconFlag::LETTER_OPENED:
+            return hasGift ? LETTER_OPENED_GIFT : LETTER_OPENED;
+        case IconFlag::BOTTLE_WRITING:
+            return hasGift ? BOTTLE_WRITING_GIFT : BOTTLE_WRITING;
+        case IconFlag::BOTTLE_UNOPENED:
+            return hasGift ? BOTTLE_UNOPENED_GIFT : BOTTLE_UNOPENED;
+        case IconFlag::BOTTLE_OPENED:
+            return hasGift ? BOTTLE_OPENED_GIFT : BOTTLE_OPENED;
+        case IconFlag::SPECIAL_UNOPENED:
+            return hasGift ? SPECIAL_UNOPENED_GIFT : SPECIAL_UNOPENED;
+        case IconFlag::SPECIAL_OPENED:
+            return hasGift ? SPECIAL_OPENED_GIFT : SPECIAL_OPENED;
+        default:
+            return {-1, -1};  // Unknown flag value
+    }
+}
 
 /**
  * Get the appropriate icon for a letter based on type, state, and gift status

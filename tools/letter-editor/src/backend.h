@@ -61,6 +61,8 @@ class Backend : public QObject {
     Q_PROPERTY(int namePosition READ namePosition WRITE setNamePosition NOTIFY letterMetadataChanged)
     Q_PROPERTY(int letterIconFlags READ letterIconFlags WRITE setLetterIconFlags NOTIFY letterMetadataChanged)
     Q_PROPERTY(int letterSource READ letterSource WRITE setLetterSource NOTIFY letterMetadataChanged)
+    Q_PROPERTY(bool isGiftWrapped READ isGiftWrapped WRITE setGiftWrapped NOTIFY letterMetadataChanged)
+    Q_PROPERTY(bool isLetterOpened READ isLetterOpened WRITE setLetterOpened NOTIFY letterMetadataChanged)
 
     // ========================================
     // GUI/Display Properties (derived, not stored)
@@ -120,6 +122,8 @@ public:
     int namePosition() const { return m_namePosition; }
     int letterIconFlags() const { return m_letterIconFlags; }
     int letterSource() const { return m_letterSource; }
+    bool isGiftWrapped() const { return (m_letterIconFlags & 0x40) != 0; }
+    bool isLetterOpened() const;
 
     // GUI/Display getters (derived, not stored)
     QString letterHeader() const { return m_letterHeader; }
@@ -166,6 +170,8 @@ public:
     void setNamePosition(int pos);
     void setLetterIconFlags(int flags);
     void setLetterSource(int source);
+    void setGiftWrapped(bool wrapped);
+    void setLetterOpened(bool opened);
 
     // GUI/Display setters (visual state only)
     void setRecipientNameStart(int pos);

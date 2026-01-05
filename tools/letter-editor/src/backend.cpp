@@ -315,6 +315,60 @@ void Backend::setLetterIconFlags(int flags) {
     }
 }
 
+void Backend::setGiftWrapped(bool wrapped) {
+    uint8_t newFlags;
+    if (wrapped) {
+        newFlags = m_letterIconFlags | 0x40;  // Set bit 6
+    } else {
+        newFlags = m_letterIconFlags & ~0x40; // Clear bit 6
+    }
+    if (newFlags != m_letterIconFlags) {
+        m_letterIconFlags = newFlags;
+        writeMetadataToData();  // Sync to m_letterData
+        emit letterMetadataChanged();
+    }
+}
+
+bool Backend::isLetterOpened() const {
+    // Check lower nibble for opened states
+    // 0x03 = opened letter, 0x06 = opened bottle, 0x08 = opened special delivery
+    uint8_t iconType = m_letterIconFlags & 0x0F;
+    return (iconType == 0x03 || iconType == 0x06 || iconType == 0x08);
+}
+
+void Backend::setLetterOpened(bool opened) {
+    uint8_t iconType = m_letterIconFlags & 0x0F;
+    uint8_t upperNibble = m_letterIconFlags & 0xF0;
+    uint8_t newIconType = iconType;
+
+    // Toggle between unopened/opened states based on letter type
+    // Writing states (0x01, 0x04) don't change
+    if (opened) {
+        // Set to opened state
+        switch (iconType) {
+            case 0x02: newIconType = 0x03; break;  // Letter: unopened -> opened
+            case 0x05: newIconType = 0x06; break;  // Bottle: unopened -> opened
+            case 0x07: newIconType = 0x08; break;  // Special: unopened -> opened
+            default: break;  // Already opened or writing state
+        }
+    } else {
+        // Set to unopened state
+        switch (iconType) {
+            case 0x03: newIconType = 0x02; break;  // Letter: opened -> unopened
+            case 0x06: newIconType = 0x05; break;  // Bottle: opened -> unopened
+            case 0x08: newIconType = 0x07; break;  // Special: opened -> unopened
+            default: break;  // Already unopened or writing state
+        }
+    }
+
+    uint8_t newFlags = upperNibble | newIconType;
+    if (newFlags != m_letterIconFlags) {
+        m_letterIconFlags = newFlags;
+        writeMetadataToData();  // Sync to m_letterData
+        emit letterMetadataChanged();
+    }
+}
+
 void Backend::setLetterSource(int source) {
     uint8_t newSource = static_cast<uint8_t>(source & 0xFF);
     if (newSource != m_letterSource) {

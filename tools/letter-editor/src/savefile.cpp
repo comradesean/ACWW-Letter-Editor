@@ -415,6 +415,7 @@ QVariantList SaveFile::getSlotSummaries(int player, int storageType) const {
         summary["senderName"] = letter.fromPlayerName;
         summary["hasAttachment"] = !empty && hasItem;
         summary["stationery"] = letter.stationeryType;
+        summary["iconFlags"] = letter.iconFlags;
         summaries.append(summary);
     }
 
