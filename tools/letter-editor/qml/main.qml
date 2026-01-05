@@ -997,7 +997,7 @@ ApplicationWindow {
 
                             ToolTip {
                                 id: recipientTooltip
-                                visible: greetingHover.containsMouse && (backend.recipientName !== "" || backend.recipientTown !== "")
+                                visible: greetingHover.containsMouse && (backend.displayRecipientName !== "" || (!backend.isRecipientStranger && backend.recipientTown !== ""))
                                 delay: 400
                                 timeout: 5000
 
@@ -1010,12 +1010,15 @@ ApplicationWindow {
 
                                 contentItem: Text {
                                     text: {
-                                        if (backend.recipientName !== "" && backend.recipientTown !== "")
-                                            return "To: " + backend.recipientName + " from " + backend.recipientTown
-                                        else if (backend.recipientName !== "")
-                                            return "To: " + backend.recipientName
-                                        else if (backend.recipientTown !== "")
-                                            return "To: " + backend.recipientTown
+                                        // Use displayRecipientName which shows "Some Stranger" when flag is 7
+                                        var displayName = backend.displayRecipientName
+                                        var displayTown = backend.isRecipientStranger ? "" : backend.recipientTown
+                                        if (displayName !== "" && displayTown !== "")
+                                            return "To: " + displayName + " from " + displayTown
+                                        else if (displayName !== "")
+                                            return "To: " + displayName
+                                        else if (displayTown !== "")
+                                            return "To: " + displayTown
                                         return ""
                                     }
                                     font.pixelSize: 12
@@ -1668,15 +1671,19 @@ ApplicationWindow {
                         TextField {
                             id: recipientNameField
                             visible: letterInfoDialog.selectedTab === 0
+                            enabled: !backend.isRecipientStranger
                             width: parent.width; height: 28
-                            text: backend.recipientName
+                            text: backend.isRecipientStranger ? "" : backend.recipientName
+                            placeholderText: backend.recipientRelation === 6 ? "(Event Bottle)" : (backend.recipientRelation === 7 ? "(Stranger)" : "")
                             maximumLength: 8
-                            font.pixelSize: 11; color: textPrimary
+                            font.pixelSize: 11; color: enabled ? textPrimary : textMuted
                             leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
                             background: Rectangle {
-                                color: bgHover; radius: 4
+                                color: recipientNameField.enabled ? bgHover : bgBase
+                                radius: 4
                                 border.color: recipientNameField.activeFocus ? accentPrimary : divider
                                 border.width: 1
+                                opacity: recipientNameField.enabled ? 1.0 : 0.5
                             }
                         }
                         TextField {
@@ -1703,15 +1710,19 @@ ApplicationWindow {
                         TextField {
                             id: recipientTownField
                             visible: letterInfoDialog.selectedTab === 0
+                            enabled: !backend.isRecipientStranger
                             width: parent.width; height: 28
-                            text: backend.recipientTown
+                            text: backend.isRecipientStranger ? "" : backend.recipientTown
+                            placeholderText: backend.isRecipientStranger ? "(None)" : ""
                             maximumLength: 8
-                            font.pixelSize: 11; color: textPrimary
+                            font.pixelSize: 11; color: enabled ? textPrimary : textMuted
                             leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
                             background: Rectangle {
-                                color: bgHover; radius: 4
+                                color: recipientTownField.enabled ? bgHover : bgBase
+                                radius: 4
                                 border.color: recipientTownField.activeFocus ? accentPrimary : divider
                                 border.width: 1
+                                opacity: recipientTownField.enabled ? 1.0 : 0.5
                             }
                         }
                         TextField {
@@ -1742,15 +1753,18 @@ ApplicationWindow {
                             TextField {
                                 id: recipientPlayerIdField
                                 visible: letterInfoDialog.selectedTab === 0
+                                enabled: !backend.isRecipientStranger
                                 width: parent.width; height: 28
-                                text: backend.recipientPlayerId.toString()
+                                text: backend.isRecipientStranger ? "0" : backend.recipientPlayerId.toString()
                                 validator: IntValidator { bottom: 0; top: 65535 }
-                                font.pixelSize: 11; color: textPrimary
+                                font.pixelSize: 11; color: enabled ? textPrimary : textMuted
                                 leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
                                 background: Rectangle {
-                                    color: bgHover; radius: 4
+                                    color: recipientPlayerIdField.enabled ? bgHover : bgBase
+                                    radius: 4
                                     border.color: recipientPlayerIdField.activeFocus ? accentPrimary : divider
                                     border.width: 1
+                                    opacity: recipientPlayerIdField.enabled ? 1.0 : 0.5
                                 }
                             }
                             TextField {
@@ -1776,15 +1790,18 @@ ApplicationWindow {
                             TextField {
                                 id: recipientTownIdField
                                 visible: letterInfoDialog.selectedTab === 0
+                                enabled: !backend.isRecipientStranger
                                 width: parent.width; height: 28
-                                text: backend.recipientTownId.toString()
+                                text: backend.isRecipientStranger ? "0" : backend.recipientTownId.toString()
                                 validator: IntValidator { bottom: 0; top: 65535 }
-                                font.pixelSize: 11; color: textPrimary
+                                font.pixelSize: 11; color: enabled ? textPrimary : textMuted
                                 leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
                                 background: Rectangle {
-                                    color: bgHover; radius: 4
+                                    color: recipientTownIdField.enabled ? bgHover : bgBase
+                                    radius: 4
                                     border.color: recipientTownIdField.activeFocus ? accentPrimary : divider
                                     border.width: 1
+                                    opacity: recipientTownIdField.enabled ? 1.0 : 0.5
                                 }
                             }
                             TextField {
@@ -1825,16 +1842,16 @@ ApplicationWindow {
                                     ListElement { text: "Player"; value: 2 }
                                     ListElement { text: "Villager"; value: 3 }
                                     ListElement { text: "Green Letter"; value: 5 }
-                                    ListElement { text: "Bottle (Sys)"; value: 6 }
-                                    ListElement { text: "Bottle (Vlgr)"; value: 7 }
+                                    ListElement { text: "Bottle (System)"; value: 6 }
+                                    ListElement { text: "Bottle (Player)"; value: 7 }
                                 }
                                 textRole: "text"
                                 currentIndex: recipientRelationCombo.findIndex(backend.recipientRelation)
-                                onActivated: backend.recipientRelation = model.get(currentIndex).value
-                                onCurrentIndexChanged: {
+                                onActivated: {
+                                    var newValue = model.get(currentIndex).value
+                                    backend.recipientRelation = newValue
                                     // Force gender to male (0) when not Future Self or Player
-                                    var val = model.get(currentIndex).value
-                                    if (val !== 1 && val !== 2) {
+                                    if (newValue !== 1 && newValue !== 2) {
                                         backend.recipientGender = 0
                                     }
                                 }
@@ -1903,15 +1920,16 @@ ApplicationWindow {
                                     ListElement { text: "Villager"; value: 3 }
                                     ListElement { text: "System"; value: 4 }
                                 }
-                                onCurrentIndexChanged: {
+                                textRole: "text"
+                                currentIndex: senderRelationCombo.findIndex(backend.senderRelation)
+                                onActivated: {
+                                    var newValue = model.get(currentIndex).value
+                                    backend.senderRelation = newValue
                                     // Force gender to male (0) when not Player/WFC
-                                    if (model.get(currentIndex).value !== 2) {
+                                    if (newValue !== 2) {
                                         backend.senderGender = 0
                                     }
                                 }
-                                textRole: "text"
-                                currentIndex: senderRelationCombo.findIndex(backend.senderRelation)
-                                onActivated: backend.senderRelation = model.get(currentIndex).value
                                 function findIndex(val) {
                                     for (var i = 0; i < model.count; i++) {
                                         if (model.get(i).value === val) return i

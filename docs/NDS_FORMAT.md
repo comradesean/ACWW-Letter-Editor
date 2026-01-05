@@ -776,6 +776,173 @@ The cloth texture used in the letter editor (`cloth082.nsbtx`) has:
 
 ---
 
+## 8. Menu Icon Textures
+
+ACWW stores inventory and menu icons in the `/menu/` directory using a tile-based format with separate palette files.
+
+### 8.1 Directory Structure
+
+```
+/menu/inventory/
+├── b_itm.bpl         # Main item palette (14 sub-palettes)
+├── b_itm0.bch        # Item tiles bank 0 (256 tiles)
+├── b_itm1.bch        # Item tiles bank 1 (256 tiles)
+├── b_itm2.bch        # Item tiles bank 2 (256 tiles)
+├── b_obj_itm.bpl     # Object item palette (3 sub-palettes)
+├── obj0.bch          # Object tiles - TOP halves (160 tiles)
+├── obj1.bch          # Object tiles - BOTTOM halves (160 tiles)
+├── b_itm_post.bpl    # Post/mail item palette (1 sub-palette)
+├── b_itm_post.bch    # Post-related tiles
+└── ...
+
+/menu/icon/
+├── b_obj_itm.bpl     # Icon palette
+├── *.bch             # Icon tile files (64 tiles each)
+└── ...
+```
+
+### 8.2 BCH File Format (Tile Data)
+
+BCH files contain raw 4bpp tile data with no header.
+
+| Property | Value |
+|----------|-------|
+| Compression | Usually uncompressed (check for LZ77) |
+| Tile size | 8×8 pixels |
+| Bits per pixel | 4 (16 colors per sub-palette) |
+| Bytes per tile | 32 |
+
+**Tile count calculation**: `fileSize / 32`
+
+**Common file sizes**:
+
+| Size | Tiles | Notes |
+|------|-------|-------|
+| 2048 | 64 | Standard icon sheet (4×4 icons of 16×16) |
+| 5120 | 160 | Object tiles (split top/bottom, see 8.5) |
+| 8192 | 256 | Large item bank |
+
+### 8.3 BPL File Format (Palette Data)
+
+BPL files contain one or more 16-color palettes in RGB555 format.
+
+| Property | Value |
+|----------|-------|
+| Compression | May be LZ77 compressed |
+| Colors per sub-palette | 16 |
+| Bytes per sub-palette | 32 (16 colors × 2 bytes) |
+| Color format | RGB555 little-endian |
+
+**Sub-palette count**: `fileSize / 32`
+
+**RGB555 decoding**:
+```
+uint16_t color = data[i] | (data[i+1] << 8);
+uint8_t r = ((color >> 0) & 0x1F) * 255 / 31;
+uint8_t g = ((color >> 5) & 0x1F) * 255 / 31;
+uint8_t b = ((color >> 10) & 0x1F) * 255 / 31;
+uint8_t a = (colorIndex == 0) ? 0 : 255;  // Index 0 = transparent
+```
+
+### 8.4 Icon Arrangement (64/256 Tiles)
+
+For standard 64-tile and 256-tile BCH files, icons are 16×16 pixels (2×2 tiles) with a **top/bottom split arrangement**:
+
+```
+File layout:
+┌─────────────────────────────┐
+│ TOP halves (first half)     │  Tiles 0 to (N/2)-1
+├─────────────────────────────┤
+│ BOTTOM halves (second half) │  Tiles N/2 to N-1
+└─────────────────────────────┘
+
+Icon assembly:
+  Icon 0:  top-left=tile[0], top-right=tile[1]
+           bottom-left=tile[N/2], bottom-right=tile[N/2+1]
+
+  Icon 1:  top-left=tile[2], top-right=tile[3]
+           bottom-left=tile[N/2+2], bottom-right=tile[N/2+3]
+  ...
+```
+
+**64-tile file**: 16 icons in 4×4 grid (64×64 output)
+**256-tile file**: 64 icons in 8×8 grid (128×128 output)
+
+### 8.5 Object Icons (obj0.bch + obj1.bch)
+
+Object icons (including letter icons) are split across **two separate files**:
+
+| File | Content | Tiles |
+|------|---------|-------|
+| obj0.bch | TOP halves of all icons | 160 |
+| obj1.bch | BOTTOM halves of all icons | 160 |
+
+**Combined output**: 80 complete 16×16 icons
+
+**Assembly algorithm**:
+```
+1. Concatenate obj0 + obj1 tile data (320 tiles total)
+2. Render linearly at 32 tiles per row (16 icons × 2 tiles each)
+3. Output: 256×80 pixels (16 icons wide × 5 icon rows)
+
+For each tile index t (0-319):
+    x = (t % 32) * 8
+    y = (t / 32) * 8
+    Draw 8×8 tile at (x, y)
+```
+
+**Palette**: Use `b_obj_itm.bpl` (3 sub-palettes available)
+
+### 8.6 Palette Selection by File Type
+
+| File pattern | Palette file |
+|--------------|--------------|
+| `obj*.bch` | b_obj_itm.bpl |
+| `*post*.bch` | b_itm_post.bpl |
+| Other BCH | b_itm.bpl (default) |
+
+### 8.7 4bpp Tile Decoding
+
+Each 8×8 tile is 32 bytes (4 bits per pixel, 2 pixels per byte):
+
+```
+for row = 0 to 7:
+    for col = 0 to 3:
+        byte = tileData[tile * 32 + row * 4 + col]
+        pixel0_index = byte & 0x0F        // Left pixel
+        pixel1_index = (byte >> 4) & 0x0F // Right pixel
+
+        x0 = tileX + col * 2
+        x1 = tileX + col * 2 + 1
+        y  = tileY + row
+
+        output[y][x0] = palette[pixel0_index]
+        output[y][x1] = palette[pixel1_index]
+```
+
+### 8.8 Complete Extraction Workflow
+
+```
+1. Load ROM and parse NitroFS (FAT/FNT)
+2. Find all .bpl files in target directory
+3. Parse palettes:
+   - Decompress if LZ77
+   - Split into 32-byte sub-palettes
+   - Convert RGB555 to RGBA
+4. For each .bch file:
+   a. Decompress if LZ77
+   b. Calculate tile count (size / 32)
+   c. Select appropriate palette by filename
+   d. Apply arrangement based on tile count:
+      - 64/256: Top/bottom split within file
+      - 160: Combine with paired file (obj0+obj1)
+      - Other: Linear layout
+   e. Decode 4bpp tiles to RGBA
+   f. Write PNG
+```
+
+---
+
 ## References
 
 - GBATEK: NDS Technical Documentation

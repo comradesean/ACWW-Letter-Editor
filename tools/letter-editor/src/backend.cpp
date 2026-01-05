@@ -111,6 +111,9 @@ bool Backend::loadRom(const QUrl& fileUrl) {
     // Load cloth texture (optional - continue even if it fails)
     m_cloth.load(rom);
 
+    // Load inventory icons (optional - continue even if it fails)
+    m_icons.load(rom);
+
     // Build paper names list using actual stationery names
     m_paperNames.clear();
     for (int i = 0; i < m_stationery.count(); i++) {
@@ -263,9 +266,16 @@ void Backend::setRecipientGender(int gender) {
 void Backend::setRecipientRelation(int relation) {
     uint8_t newRelation = static_cast<uint8_t>(relation & 0xFF);
     if (newRelation != m_recipientRelation) {
+        uint8_t oldRelation = m_recipientRelation;
         m_recipientRelation = newRelation;
         writeRecipientToData();  // Sync to m_letterData
         emit letterMetadataChanged();
+        // Emit display name change when switching between normal/6/7 states
+        bool oldAnonymous = (oldRelation == 6 || oldRelation == 7);
+        bool newAnonymous = (newRelation == 6 || newRelation == 7);
+        if (oldAnonymous != newAnonymous || oldRelation != newRelation) {
+            emit recipientDisplayNameChanged();
+        }
     }
 }
 
@@ -453,8 +463,11 @@ QVector<VisualGlyph> Backend::buildHeaderVisualGlyphs(const QString& templateTex
         return glyphs;
     }
 
+    // Use displayRecipientName() which returns "Some Stranger" when recipientRelation == 7
+    QString nameToDisplay = displayRecipientName();
+
     int namePos = static_cast<int>(m_namePosition);
-    bool hasName = !m_recipientName.isEmpty() && namePos >= 0 && namePos <= templateText.length();
+    bool hasName = !nameToDisplay.isEmpty() && namePos >= 0 && namePos <= templateText.length();
 
     int currentX = startX;
 
@@ -462,7 +475,7 @@ QVector<VisualGlyph> Backend::buildHeaderVisualGlyphs(const QString& templateTex
         // At namePos, insert each name character as individual glyphs
         // All name glyphs map to the same template position (namePos)
         if (hasName && i == namePos) {
-            for (const QChar& c : m_recipientName) {
+            for (const QChar& c : nameToDisplay) {
                 int glyphStartX = currentX;
                 currentX += m_font.charWidth(c) + glyphSpacing;
                 glyphs.append({c, glyphStartX, currentX, true, namePos});
@@ -478,7 +491,7 @@ QVector<VisualGlyph> Backend::buildHeaderVisualGlyphs(const QString& templateTex
 
     // Handle name at end of template (namePos == templateText.length())
     if (hasName && namePos >= templateText.length()) {
-        for (const QChar& c : m_recipientName) {
+        for (const QChar& c : nameToDisplay) {
             int glyphStartX = currentX;
             currentX += m_font.charWidth(c) + glyphSpacing;
             glyphs.append({c, glyphStartX, currentX, true, namePos});
@@ -928,6 +941,18 @@ QString Backend::attachedItemName() const {
         return QString("Unknown (0x%1)").arg(m_attachedItem, 4, 16, QChar('0')).toUpper();
     }
     return name;
+}
+
+QString Backend::displayRecipientName() const {
+    // When recipientRelation is 6 (Bottle/System), display no name
+    if (m_recipientRelation == 6) {
+        return QString();
+    }
+    // When recipientRelation is 7 (Bottle/Player), display "Some Stranger"
+    if (m_recipientRelation == 7) {
+        return QStringLiteral("Some Stranger");
+    }
+    return m_recipientName;
 }
 
 QString Backend::getItemName(int hexCode) const {

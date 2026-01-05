@@ -10,6 +10,7 @@
 #include "stationery_loader.h"
 #include "font_loader.h"
 #include "cloth_loader.h"
+#include "icon_loader.h"
 #include "nds_rom.h"
 #include "savefile.h"
 #include "letter.h"
@@ -76,6 +77,10 @@ class Backend : public QObject {
     // Derived item name for display
     Q_PROPERTY(QString attachedItemName READ attachedItemName NOTIFY attachedItemChanged)
 
+    // Stranger detection (recipientRelation == 7)
+    Q_PROPERTY(bool isRecipientStranger READ isRecipientStranger NOTIFY letterMetadataChanged)
+    Q_PROPERTY(QString displayRecipientName READ displayRecipientName NOTIFY recipientDisplayNameChanged)
+
     // ========================================
     // Save File State
     // ========================================
@@ -123,6 +128,8 @@ public:
     int recipientNameStart() const { return m_recipientNameStart; }
     int recipientNameEnd() const { return m_recipientNameEnd; }
     QString attachedItemName() const;
+    bool isRecipientStranger() const { return m_recipientRelation == 6 || m_recipientRelation == 7; }
+    QString displayRecipientName() const;
 
     // Save file getters
     bool isSaveLoaded() const { return m_saveFile.isLoaded(); }
@@ -195,6 +202,7 @@ public:
     const StationeryLoader& stationery() const { return m_stationery; }
     const FontLoader& font() const { return m_font; }
     const ClothLoader& cloth() const { return m_cloth; }
+    const IconLoader& icons() const { return m_icons; }
 
     // Build visual glyph list for header (shared between canvas and PNG export)
     QVector<VisualGlyph> buildHeaderVisualGlyphs(const QString& templateText, int startX = LetterConstants::HEADER_LEFT, int glyphSpacing = LetterConstants::GLYPH_SPACING) const;
@@ -214,6 +222,7 @@ signals:
     // GUI/Display State
     void paperChanged();
     void recipientNamePositionChanged();
+    void recipientDisplayNameChanged();
 
     // Warnings
     void unknownByteWarning(const QString& message);
@@ -233,6 +242,7 @@ private:
     StationeryLoader m_stationery;
     FontLoader m_font;
     ClothLoader m_cloth;
+    IconLoader m_icons;
     QStringList m_paperNames;
 
     // ========================================
