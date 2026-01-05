@@ -12,6 +12,7 @@ class SaveFile : public QObject {
     Q_PROPERTY(QString region READ regionName NOTIFY loadedChanged)
     Q_PROPERTY(QString filePath READ filePath NOTIFY loadedChanged)
     Q_PROPERTY(bool modified READ isModified NOTIFY modifiedChanged)
+    Q_PROPERTY(bool bankInitialized READ isBankInitialized NOTIFY loadedChanged)
 
 public:
     enum class Region {
@@ -52,6 +53,7 @@ public:
     QString regionName() const;
     QString filePath() const { return m_filePath; }
     bool isModified() const { return m_modified; }
+    bool isBankInitialized() const;
 
     // Player info
     Q_INVOKABLE QString getPlayerName(int player) const;

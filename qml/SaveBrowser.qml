@@ -163,8 +163,15 @@ Rectangle {
                         radius: 6
 
                         property bool isSelected: backend && backend.currentStorageType === index
+                        // Bank (index 2) is disabled when not initialized
+                        property bool isDisabled: index === 2 && backend && backend.saveLoaded && !backend.bankInitialized
 
-                        color: isSelected ? accentPrimary : (storageMouseArea.containsMouse ? bgHover : "transparent")
+                        color: {
+                            if (isDisabled) return Qt.rgba(bgElevated.r, bgElevated.g, bgElevated.b, 0.5)
+                            if (isSelected) return accentPrimary
+                            if (storageMouseArea.containsMouse) return bgHover
+                            return "transparent"
+                        }
 
                         Row {
                             anchors.centerIn: parent
@@ -174,13 +181,17 @@ Rectangle {
                                 text: modelData.name
                                 font.pixelSize: 11
                                 font.weight: isSelected ? Font.DemiBold : Font.Normal
-                                color: isSelected ? bgBase : textSecondary
+                                color: {
+                                    if (storageTab.isDisabled) return Qt.rgba(textMuted.r, textMuted.g, textMuted.b, 0.5)
+                                    if (isSelected) return bgBase
+                                    return textSecondary
+                                }
                                 anchors.verticalCenter: parent.verticalCenter
                             }
 
                             // Slot count badge
                             Rectangle {
-                                visible: !isSelected
+                                visible: !isSelected && !storageTab.isDisabled
                                 width: countText.width + 8
                                 height: 16
                                 radius: 8
@@ -197,12 +208,19 @@ Rectangle {
                             }
                         }
 
+                        ToolTip {
+                            visible: storageTab.isDisabled && storageMouseArea.containsMouse
+                            text: qsTr("Save a letter to the bank in-game to initialize it")
+                            delay: 300
+                        }
+
                         MouseArea {
                             id: storageMouseArea
                             anchors.fill: parent
                             hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
+                            cursorShape: storageTab.isDisabled ? Qt.ForbiddenCursor : Qt.PointingHandCursor
                             onClicked: {
+                                if (storageTab.isDisabled) return
                                 if (backend && backend.saveLoaded && index !== backend.currentStorageType) {
                                     saveBrowser.requestStorageChange(index)
                                 }
@@ -256,7 +274,12 @@ Rectangle {
                 textMuted: saveBrowser.textMuted
 
                 onClicked: {
-                    saveBrowser.requestSlotChange(index)
+                    if (modelData && modelData.isEmpty) {
+                        saveBrowser.requestEmptySlotChange(index, false,
+                            backend.currentPlayer, backend.currentStorageType, backend.currentSlot)
+                    } else {
+                        saveBrowser.requestSlotChange(index)
+                    }
                 }
             }
 
@@ -311,6 +334,7 @@ Rectangle {
 
     // Signals for dirty state management (handled by parent)
     signal requestSlotChange(int newSlot)
+    signal requestEmptySlotChange(int newSlot, bool isStorageEmpty, int prevPlayer, int prevStorage, int prevSlot)
     signal requestStorageChange(int newStorage)
     signal requestPlayerChange(int newPlayer)
     signal slotSaved()
@@ -331,21 +355,167 @@ Rectangle {
         slotSelected(slot)
     }
 
-    // Function to perform storage change (called after dirty check passes)
-    function changeStorage(storageType) {
-        backend.currentStorageType = storageType
-        backend.currentSlot = 0
+    // Function to create a new letter in an empty slot (bypasses loading invalid data)
+    function createLetterInSlot(slot) {
+        backend.currentSlot = slot
+        backend.clearLetter()
+        modifiedSlot = -1
+        slotSelected(slot)
+    }
+
+    // Find first non-empty slot in current storage, returns -1 if all empty
+    function findFirstNonEmptySlot() {
+        var summaries = backend.getSlotSummaries()
+        for (var i = 0; i < summaries.length; i++) {
+            if (!summaries[i].isEmpty) {
+                return i
+            }
+        }
+        return -1
+    }
+
+    // Find first existing player, returns -1 if none exist
+    function findFirstExistingPlayer() {
+        for (var i = 0; i < 4; i++) {
+            if (backend.playerExists(i)) {
+                return i
+            }
+        }
+        return -1
+    }
+
+    // Check if any players exist in the save
+    function hasAnyPlayers() {
+        return findFirstExistingPlayer() >= 0
+    }
+
+    // Find first letter across all players and storages
+    // Returns {player: int, storage: int, slot: int} or null if none found
+    function findFirstLetterInSave() {
+        var storageTypes = [0, 1, 2]  // Inventory, Mailbox, Bank
+
+        for (var p = 0; p < 4; p++) {
+            if (!backend.playerExists(p)) continue
+
+            for (var s = 0; s < storageTypes.length; s++) {
+                var storageType = storageTypes[s]
+                // Skip uninitialized bank
+                if (storageType === 2 && !backend.bankInitialized) continue
+
+                // Temporarily switch to check this storage
+                var oldPlayer = backend.currentPlayer
+                var oldStorage = backend.currentStorageType
+                backend.currentPlayer = p
+                backend.currentStorageType = storageType
+
+                var summaries = backend.getSlotSummaries()
+                for (var slot = 0; slot < summaries.length; slot++) {
+                    if (!summaries[slot].isEmpty) {
+                        // Restore and return result
+                        backend.currentPlayer = oldPlayer
+                        backend.currentStorageType = oldStorage
+                        return {player: p, storage: storageType, slot: slot}
+                    }
+                }
+
+                backend.currentPlayer = oldPlayer
+                backend.currentStorageType = oldStorage
+            }
+        }
+        return null
+    }
+
+    // Get first available player and storage for creating a new letter
+    // Returns {player: int, storage: int, storageName: string}
+    function getFirstAvailableLocation() {
+        var storageNames = ["Inventory", "Mailbox", "Bank"]
+        var firstPlayer = findFirstExistingPlayer()
+        if (firstPlayer < 0) return null
+
+        // Check each storage, skip uninitialized bank
+        for (var s = 0; s < 3; s++) {
+            if (s === 2 && !backend.bankInitialized) continue
+            return {player: firstPlayer, storage: s, storageName: storageNames[s]}
+        }
+        return {player: firstPlayer, storage: 0, storageName: "Inventory"}
+    }
+
+    // Initialize save browser to a specific player/storage/slot and load it
+    function initializeToLocation(player, storage, slot) {
+        backend.currentPlayer = player
+        backend.currentStorageType = storage
+        backend.currentSlot = slot
         backend.loadCurrentSlot()
         modifiedSlot = -1
-        slotSelected(0)  // Update canvas and capture clean state
+        slotList.model = backend.getSlotSummaries()
+        slotSelected(slot)
+    }
+
+    // Initialize to a location and create a new letter there
+    function initializeAndCreateLetter(player, storage) {
+        backend.currentPlayer = player
+        backend.currentStorageType = storage
+        backend.currentSlot = 0
+        backend.clearLetter()
+        modifiedSlot = -1
+        slotList.model = backend.getSlotSummaries()
+        slotSelected(0)
+    }
+
+    // Function to perform storage change (called after dirty check passes)
+    function changeStorage(storageType) {
+        // Save previous location for potential revert
+        var prevPlayer = backend.currentPlayer
+        var prevStorage = backend.currentStorageType
+        var prevSlot = backend.currentSlot
+
+        backend.currentStorageType = storageType
+        slotList.model = backend.getSlotSummaries()
+
+        // Find first non-empty slot
+        var firstSlot = findFirstNonEmptySlot()
+        if (firstSlot >= 0) {
+            backend.currentSlot = firstSlot
+            backend.loadCurrentSlot()
+            modifiedSlot = -1
+            slotSelected(firstSlot)
+        } else {
+            // All slots empty - ask user if they want to create a letter
+            requestEmptySlotChange(0, true, prevPlayer, prevStorage, prevSlot)
+        }
     }
 
     // Function to perform player change (called after dirty check passes)
     function changePlayer(player) {
+        // Save previous location for potential revert
+        var prevPlayer = backend.currentPlayer
+        var prevStorage = backend.currentStorageType
+        var prevSlot = backend.currentSlot
+
         backend.currentPlayer = player
-        backend.currentSlot = 0
+        slotList.model = backend.getSlotSummaries()
+
+        // Find first non-empty slot
+        var firstSlot = findFirstNonEmptySlot()
+        if (firstSlot >= 0) {
+            backend.currentSlot = firstSlot
+            backend.loadCurrentSlot()
+            modifiedSlot = -1
+            slotSelected(firstSlot)
+        } else {
+            // All slots empty - ask user if they want to create a letter
+            requestEmptySlotChange(0, true, prevPlayer, prevStorage, prevSlot)
+        }
+    }
+
+    // Revert to a previous location (used when user cancels empty slot dialog)
+    function revertToLocation(player, storage, slot) {
+        backend.currentPlayer = player
+        backend.currentStorageType = storage
+        backend.currentSlot = slot
         backend.loadCurrentSlot()
         modifiedSlot = -1
-        slotSelected(0)  // Update canvas and capture clean state
+        slotList.model = backend.getSlotSummaries()
+        slotSelected(slot)
     }
 }
