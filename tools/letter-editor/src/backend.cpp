@@ -111,6 +111,9 @@ bool Backend::loadRom(const QUrl& fileUrl) {
     // Load cloth texture (optional - continue even if it fails)
     m_cloth.load(rom);
 
+    // Load inventory icons (optional - continue even if it fails)
+    m_icons.load(rom);
+
     // Build paper names list using actual stationery names
     m_paperNames.clear();
     for (int i = 0; i < m_stationery.count(); i++) {
@@ -263,9 +266,16 @@ void Backend::setRecipientGender(int gender) {
 void Backend::setRecipientRelation(int relation) {
     uint8_t newRelation = static_cast<uint8_t>(relation & 0xFF);
     if (newRelation != m_recipientRelation) {
+        uint8_t oldRelation = m_recipientRelation;
         m_recipientRelation = newRelation;
         writeRecipientToData();  // Sync to m_letterData
         emit letterMetadataChanged();
+        // Emit display name change when switching between normal/6/7 states
+        bool oldAnonymous = (oldRelation == 6 || oldRelation == 7);
+        bool newAnonymous = (newRelation == 6 || newRelation == 7);
+        if (oldAnonymous != newAnonymous || oldRelation != newRelation) {
+            emit recipientDisplayNameChanged();
+        }
     }
 }
 
@@ -298,6 +308,60 @@ void Backend::setNamePosition(int pos) {
 
 void Backend::setLetterIconFlags(int flags) {
     uint8_t newFlags = static_cast<uint8_t>(flags & 0xFF);
+    if (newFlags != m_letterIconFlags) {
+        m_letterIconFlags = newFlags;
+        writeMetadataToData();  // Sync to m_letterData
+        emit letterMetadataChanged();
+    }
+}
+
+void Backend::setGiftWrapped(bool wrapped) {
+    uint8_t newFlags;
+    if (wrapped) {
+        newFlags = m_letterIconFlags | 0x40;  // Set bit 6
+    } else {
+        newFlags = m_letterIconFlags & ~0x40; // Clear bit 6
+    }
+    if (newFlags != m_letterIconFlags) {
+        m_letterIconFlags = newFlags;
+        writeMetadataToData();  // Sync to m_letterData
+        emit letterMetadataChanged();
+    }
+}
+
+bool Backend::isLetterOpened() const {
+    // Check lower nibble for opened states
+    // 0x03 = opened letter, 0x06 = opened bottle, 0x08 = opened special delivery
+    uint8_t iconType = m_letterIconFlags & 0x0F;
+    return (iconType == 0x03 || iconType == 0x06 || iconType == 0x08);
+}
+
+void Backend::setLetterOpened(bool opened) {
+    uint8_t iconType = m_letterIconFlags & 0x0F;
+    uint8_t upperNibble = m_letterIconFlags & 0xF0;
+    uint8_t newIconType = iconType;
+
+    // Toggle between unopened/opened states based on letter type
+    // Writing states (0x01, 0x04) don't change
+    if (opened) {
+        // Set to opened state
+        switch (iconType) {
+            case 0x02: newIconType = 0x03; break;  // Letter: unopened -> opened
+            case 0x05: newIconType = 0x06; break;  // Bottle: unopened -> opened
+            case 0x07: newIconType = 0x08; break;  // Special: unopened -> opened
+            default: break;  // Already opened or writing state
+        }
+    } else {
+        // Set to unopened state
+        switch (iconType) {
+            case 0x03: newIconType = 0x02; break;  // Letter: opened -> unopened
+            case 0x06: newIconType = 0x05; break;  // Bottle: opened -> unopened
+            case 0x08: newIconType = 0x07; break;  // Special: opened -> unopened
+            default: break;  // Already unopened or writing state
+        }
+    }
+
+    uint8_t newFlags = upperNibble | newIconType;
     if (newFlags != m_letterIconFlags) {
         m_letterIconFlags = newFlags;
         writeMetadataToData();  // Sync to m_letterData
@@ -453,8 +517,11 @@ QVector<VisualGlyph> Backend::buildHeaderVisualGlyphs(const QString& templateTex
         return glyphs;
     }
 
+    // Use displayRecipientName() which returns "Some Stranger" when recipientRelation == 7
+    QString nameToDisplay = displayRecipientName();
+
     int namePos = static_cast<int>(m_namePosition);
-    bool hasName = !m_recipientName.isEmpty() && namePos >= 0 && namePos <= templateText.length();
+    bool hasName = !nameToDisplay.isEmpty() && namePos >= 0 && namePos <= templateText.length();
 
     int currentX = startX;
 
@@ -462,7 +529,7 @@ QVector<VisualGlyph> Backend::buildHeaderVisualGlyphs(const QString& templateTex
         // At namePos, insert each name character as individual glyphs
         // All name glyphs map to the same template position (namePos)
         if (hasName && i == namePos) {
-            for (const QChar& c : m_recipientName) {
+            for (const QChar& c : nameToDisplay) {
                 int glyphStartX = currentX;
                 currentX += m_font.charWidth(c) + glyphSpacing;
                 glyphs.append({c, glyphStartX, currentX, true, namePos});
@@ -478,7 +545,7 @@ QVector<VisualGlyph> Backend::buildHeaderVisualGlyphs(const QString& templateTex
 
     // Handle name at end of template (namePos == templateText.length())
     if (hasName && namePos >= templateText.length()) {
-        for (const QChar& c : m_recipientName) {
+        for (const QChar& c : nameToDisplay) {
             int glyphStartX = currentX;
             currentX += m_font.charWidth(c) + glyphSpacing;
             glyphs.append({c, glyphStartX, currentX, true, namePos});
@@ -928,6 +995,18 @@ QString Backend::attachedItemName() const {
         return QString("Unknown (0x%1)").arg(m_attachedItem, 4, 16, QChar('0')).toUpper();
     }
     return name;
+}
+
+QString Backend::displayRecipientName() const {
+    // When recipientRelation is 6 (Bottle/System), display no name
+    if (m_recipientRelation == 6) {
+        return QString();
+    }
+    // When recipientRelation is 7 (Bottle/Player), display "Some Stranger"
+    if (m_recipientRelation == 7) {
+        return QStringLiteral("Some Stranger");
+    }
+    return m_recipientName;
 }
 
 QString Backend::getItemName(int hexCode) const {

@@ -291,6 +291,8 @@ Rectangle {
                 onClicked: {
                     backend.saveCurrentSlot()
                     saveBrowser.modifiedSlot = -1
+                    // Refresh slot list to show updated icon
+                    slotList.model = backend.getSlotSummaries()
                     slotSaved()
                 }
             }

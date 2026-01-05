@@ -71,15 +71,30 @@ Rectangle {
         anchors.rightMargin: 10
         spacing: 10
 
-        // Status indicator (shape + color)
+        // Letter icon or empty slot indicator
         Item {
             width: 16
             height: 16
             Layout.alignment: Qt.AlignVCenter
 
-            // Filled circle for occupied slots
+            // Letter icon for occupied slots
+            Image {
+                id: letterIcon
+                visible: slotData && !slotData.isEmpty && slotData.iconFlags > 0
+                anchors.centerIn: parent
+                width: 16
+                height: 16
+                source: (slotData && !slotData.isEmpty && slotData.iconFlags > 0)
+                    ? "image://lettericons/" + slotData.iconFlags + "/" + (slotData.hasAttachment ? "1" : "0")
+                    : ""
+                sourceSize: Qt.size(16, 16)
+                smooth: false
+                cache: true
+            }
+
+            // Fallback dot for occupied slots without valid icon
             Rectangle {
-                visible: slotData && !slotData.isEmpty
+                visible: slotData && !slotData.isEmpty && (!letterIcon.visible || letterIcon.status !== Image.Ready)
                 width: 8
                 height: 8
                 radius: 4
@@ -128,24 +143,6 @@ Rectangle {
                 color: textMuted
                 elide: Text.ElideRight
                 Layout.fillWidth: true
-            }
-        }
-
-        // Attachment badge
-        Rectangle {
-            visible: slotData && slotData.hasAttachment
-            width: 20
-            height: 20
-            radius: 4
-            color: Qt.rgba(accentPrimary.r, accentPrimary.g, accentPrimary.b, 0.15)
-            Layout.alignment: Qt.AlignVCenter
-
-            Text {
-                anchors.centerIn: parent
-                text: "+"
-                font.pixelSize: 12
-                font.weight: Font.Medium
-                color: accentPrimary
             }
         }
 

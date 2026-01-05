@@ -997,7 +997,7 @@ ApplicationWindow {
 
                             ToolTip {
                                 id: recipientTooltip
-                                visible: greetingHover.containsMouse && (backend.recipientName !== "" || backend.recipientTown !== "")
+                                visible: greetingHover.containsMouse && (backend.displayRecipientName !== "" || (!backend.isRecipientStranger && backend.recipientTown !== ""))
                                 delay: 400
                                 timeout: 5000
 
@@ -1010,12 +1010,15 @@ ApplicationWindow {
 
                                 contentItem: Text {
                                     text: {
-                                        if (backend.recipientName !== "" && backend.recipientTown !== "")
-                                            return "To: " + backend.recipientName + " from " + backend.recipientTown
-                                        else if (backend.recipientName !== "")
-                                            return "To: " + backend.recipientName
-                                        else if (backend.recipientTown !== "")
-                                            return "To: " + backend.recipientTown
+                                        // Use displayRecipientName which shows "Some Stranger" when flag is 7
+                                        var displayName = backend.displayRecipientName
+                                        var displayTown = backend.isRecipientStranger ? "" : backend.recipientTown
+                                        if (displayName !== "" && displayTown !== "")
+                                            return "To: " + displayName + " from " + displayTown
+                                        else if (displayName !== "")
+                                            return "To: " + displayName
+                                        else if (displayTown !== "")
+                                            return "To: " + displayTown
                                         return ""
                                     }
                                     font.pixelSize: 12
@@ -1101,6 +1104,96 @@ ApplicationWindow {
                     anchors.topMargin: 12
                     spacing: 10
                     visible: backend.loaded
+
+                    // Opened checkbox with overlay for tooltip on disabled state
+                    Item {
+                        width: letterOpenedCheckbox.width
+                        height: letterOpenedCheckbox.height
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        CheckBox {
+                            id: letterOpenedCheckbox
+                            // Disabled for writing states (0x01 = letter writing, 0x04 = bottle writing)
+                            property int iconType: backend.letterIconFlags & 0x0F
+                            property bool isWritingState: iconType === 0x01 || iconType === 0x04
+                            enabled: !isWritingState
+                            checked: backend.isLetterOpened
+                            onCheckedChanged: {
+                                if (checked !== backend.isLetterOpened) {
+                                    backend.isLetterOpened = checked
+                                }
+                            }
+
+                            indicator: Rectangle {
+                                implicitWidth: 16
+                                implicitHeight: 16
+                                x: letterOpenedCheckbox.leftPadding
+                                y: parent.height / 2 - height / 2
+                                radius: 3
+                                color: letterOpenedCheckbox.enabled
+                                    ? (letterOpenedCheckbox.checked ? accentPrimary : bgHover)
+                                    : Qt.darker(bgHover, 1.3)
+                                border.color: letterOpenedCheckbox.enabled
+                                    ? (letterOpenedCheckbox.checked ? accentPrimary : divider)
+                                    : Qt.darker(divider, 1.3)
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: letterOpenedCheckbox.enabled ? "✓" : "✕"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                    color: letterOpenedCheckbox.enabled ? bgBase : textMuted
+                                    visible: letterOpenedCheckbox.checked || !letterOpenedCheckbox.enabled
+                                }
+                            }
+                            contentItem: Text {
+                                text: "Opened"
+                                font.pixelSize: 12
+                                font.weight: Font.Medium
+                                color: letterOpenedCheckbox.enabled ? textMuted : Qt.darker(textMuted, 1.3)
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: letterOpenedCheckbox.indicator.width + 4
+                            }
+                        }
+
+                        // Invisible mouse area overlay for tooltip on disabled checkbox
+                        MouseArea {
+                            id: openedMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                            propagateComposedEvents: true
+
+                            ToolTip {
+                                visible: letterOpenedCheckbox.isWritingState && openedMouseArea.containsMouse
+                                text: qsTr("Letters being written cannot be marked as opened")
+                                delay: 300
+                                timeout: 5000
+
+                                background: Rectangle {
+                                    color: bgElevated
+                                    radius: 6
+                                    border.color: divider
+                                    border.width: 1
+                                }
+
+                                contentItem: Text {
+                                    text: qsTr("Letters being written cannot be marked as opened")
+                                    font.pixelSize: 12
+                                    color: textPrimary
+                                }
+                            }
+                        }
+                    }
+
+                    // Vertical divider
+                    Rectangle {
+                        width: 1
+                        height: 20
+                        color: divider
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
 
                     Label {
                         text: "Stationery"
@@ -1668,15 +1761,19 @@ ApplicationWindow {
                         TextField {
                             id: recipientNameField
                             visible: letterInfoDialog.selectedTab === 0
+                            enabled: !backend.isRecipientStranger
                             width: parent.width; height: 28
-                            text: backend.recipientName
+                            text: backend.isRecipientStranger ? "" : backend.recipientName
+                            placeholderText: backend.recipientRelation === 6 ? "(Event Bottle)" : (backend.recipientRelation === 7 ? "(Stranger)" : "")
                             maximumLength: 8
-                            font.pixelSize: 11; color: textPrimary
+                            font.pixelSize: 11; color: enabled ? textPrimary : textMuted
                             leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
                             background: Rectangle {
-                                color: bgHover; radius: 4
+                                color: recipientNameField.enabled ? bgHover : bgBase
+                                radius: 4
                                 border.color: recipientNameField.activeFocus ? accentPrimary : divider
                                 border.width: 1
+                                opacity: recipientNameField.enabled ? 1.0 : 0.5
                             }
                         }
                         TextField {
@@ -1703,15 +1800,19 @@ ApplicationWindow {
                         TextField {
                             id: recipientTownField
                             visible: letterInfoDialog.selectedTab === 0
+                            enabled: !backend.isRecipientStranger
                             width: parent.width; height: 28
-                            text: backend.recipientTown
+                            text: backend.isRecipientStranger ? "" : backend.recipientTown
+                            placeholderText: backend.isRecipientStranger ? "(None)" : ""
                             maximumLength: 8
-                            font.pixelSize: 11; color: textPrimary
+                            font.pixelSize: 11; color: enabled ? textPrimary : textMuted
                             leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
                             background: Rectangle {
-                                color: bgHover; radius: 4
+                                color: recipientTownField.enabled ? bgHover : bgBase
+                                radius: 4
                                 border.color: recipientTownField.activeFocus ? accentPrimary : divider
                                 border.width: 1
+                                opacity: recipientTownField.enabled ? 1.0 : 0.5
                             }
                         }
                         TextField {
@@ -1742,15 +1843,18 @@ ApplicationWindow {
                             TextField {
                                 id: recipientPlayerIdField
                                 visible: letterInfoDialog.selectedTab === 0
+                                enabled: !backend.isRecipientStranger
                                 width: parent.width; height: 28
-                                text: backend.recipientPlayerId.toString()
+                                text: backend.isRecipientStranger ? "0" : backend.recipientPlayerId.toString()
                                 validator: IntValidator { bottom: 0; top: 65535 }
-                                font.pixelSize: 11; color: textPrimary
+                                font.pixelSize: 11; color: enabled ? textPrimary : textMuted
                                 leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
                                 background: Rectangle {
-                                    color: bgHover; radius: 4
+                                    color: recipientPlayerIdField.enabled ? bgHover : bgBase
+                                    radius: 4
                                     border.color: recipientPlayerIdField.activeFocus ? accentPrimary : divider
                                     border.width: 1
+                                    opacity: recipientPlayerIdField.enabled ? 1.0 : 0.5
                                 }
                             }
                             TextField {
@@ -1776,15 +1880,18 @@ ApplicationWindow {
                             TextField {
                                 id: recipientTownIdField
                                 visible: letterInfoDialog.selectedTab === 0
+                                enabled: !backend.isRecipientStranger
                                 width: parent.width; height: 28
-                                text: backend.recipientTownId.toString()
+                                text: backend.isRecipientStranger ? "0" : backend.recipientTownId.toString()
                                 validator: IntValidator { bottom: 0; top: 65535 }
-                                font.pixelSize: 11; color: textPrimary
+                                font.pixelSize: 11; color: enabled ? textPrimary : textMuted
                                 leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
                                 background: Rectangle {
-                                    color: bgHover; radius: 4
+                                    color: recipientTownIdField.enabled ? bgHover : bgBase
+                                    radius: 4
                                     border.color: recipientTownIdField.activeFocus ? accentPrimary : divider
                                     border.width: 1
+                                    opacity: recipientTownIdField.enabled ? 1.0 : 0.5
                                 }
                             }
                             TextField {
@@ -1825,16 +1932,16 @@ ApplicationWindow {
                                     ListElement { text: "Player"; value: 2 }
                                     ListElement { text: "Villager"; value: 3 }
                                     ListElement { text: "Green Letter"; value: 5 }
-                                    ListElement { text: "Bottle (Sys)"; value: 6 }
-                                    ListElement { text: "Bottle (Vlgr)"; value: 7 }
+                                    ListElement { text: "Bottle (System)"; value: 6 }
+                                    ListElement { text: "Bottle (Player)"; value: 7 }
                                 }
                                 textRole: "text"
                                 currentIndex: recipientRelationCombo.findIndex(backend.recipientRelation)
-                                onActivated: backend.recipientRelation = model.get(currentIndex).value
-                                onCurrentIndexChanged: {
+                                onActivated: {
+                                    var newValue = model.get(currentIndex).value
+                                    backend.recipientRelation = newValue
                                     // Force gender to male (0) when not Future Self or Player
-                                    var val = model.get(currentIndex).value
-                                    if (val !== 1 && val !== 2) {
+                                    if (newValue !== 1 && newValue !== 2) {
                                         backend.recipientGender = 0
                                     }
                                 }
@@ -1903,15 +2010,16 @@ ApplicationWindow {
                                     ListElement { text: "Villager"; value: 3 }
                                     ListElement { text: "System"; value: 4 }
                                 }
-                                onCurrentIndexChanged: {
+                                textRole: "text"
+                                currentIndex: senderRelationCombo.findIndex(backend.senderRelation)
+                                onActivated: {
+                                    var newValue = model.get(currentIndex).value
+                                    backend.senderRelation = newValue
                                     // Force gender to male (0) when not Player/WFC
-                                    if (model.get(currentIndex).value !== 2) {
+                                    if (newValue !== 2) {
                                         backend.senderGender = 0
                                     }
                                 }
-                                textRole: "text"
-                                currentIndex: senderRelationCombo.findIndex(backend.senderRelation)
-                                onActivated: backend.senderRelation = model.get(currentIndex).value
                                 function findIndex(val) {
                                     for (var i = 0; i < model.count; i++) {
                                         if (model.get(i).value === val) return i
@@ -2429,11 +2537,79 @@ ApplicationWindow {
                         }
                     }
 
-                    // Item count
-                    Text {
-                        text: attachedItemDialog.filteredItems.length + " items"
-                        font.pixelSize: 10
-                        color: textMuted
+                    // Item count and wrapped gift checkbox
+                    Row {
+                        width: parent.width
+                        height: 14
+                        spacing: 8
+
+                        Text {
+                            text: attachedItemDialog.filteredItems.length + " items"
+                            font.pixelSize: 10
+                            color: textMuted
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Item { width: parent.width - 120; height: 1 }
+
+                        CheckBox {
+                            id: wrappedGiftCheckbox
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: 15
+                            padding: 0
+                            topPadding: 0
+                            bottomPadding: 0
+                            leftPadding: 0
+                            rightPadding: 0
+                            spacing: 0
+                            enabled: {
+                                var hex = parseInt(attachedItemDialogField.text, 16)
+                                return !isNaN(hex) && hex !== 0xFFF1
+                            }
+                            checked: backend.isGiftWrapped
+                            onCheckedChanged: {
+                                if (checked !== backend.isGiftWrapped) {
+                                    backend.isGiftWrapped = checked
+                                }
+                            }
+                            onEnabledChanged: {
+                                // When disabled (no item), uncheck and clear wrapped flag
+                                if (!enabled && backend.isGiftWrapped) {
+                                    backend.isGiftWrapped = false
+                                }
+                            }
+                            indicator: Rectangle {
+                                implicitWidth: 14
+                                implicitHeight: 14
+                                x: 0
+                                y: (wrappedGiftCheckbox.height - height) / 2
+                                radius: 2
+                                color: wrappedGiftCheckbox.enabled
+                                    ? (wrappedGiftCheckbox.checked ? accentPrimary : bgHover)
+                                    : Qt.darker(bgHover, 1.2)
+                                border.color: wrappedGiftCheckbox.enabled
+                                    ? (wrappedGiftCheckbox.checked ? accentPrimary : divider)
+                                    : Qt.darker(divider, 1.2)
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "✓"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                    color: bgBase
+                                    visible: wrappedGiftCheckbox.checked
+                                }
+                            }
+                            contentItem: Text {
+                                text: "Wrapped"
+                                font.pixelSize: 10
+                                color: wrappedGiftCheckbox.enabled ? textMuted : Qt.darker(textMuted, 1.3)
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: 18
+                            }
+                        }
                     }
 
                     // Item list
