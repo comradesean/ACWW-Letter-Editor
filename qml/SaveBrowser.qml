@@ -274,9 +274,13 @@ Rectangle {
                 textMuted: saveBrowser.textMuted
 
                 onClicked: {
+                    // Skip if clicking the current slot
+                    if (index === backend.currentSlot) return
+
                     if (modelData && modelData.isEmpty) {
+                        // For empty slot clicks, emit with needsDirtyCheck=true
                         saveBrowser.requestEmptySlotChange(index, false,
-                            backend.currentPlayer, backend.currentStorageType, backend.currentSlot)
+                            backend.currentPlayer, backend.currentStorageType, backend.currentSlot, true)
                     } else {
                         saveBrowser.requestSlotChange(index)
                     }
@@ -334,7 +338,7 @@ Rectangle {
 
     // Signals for dirty state management (handled by parent)
     signal requestSlotChange(int newSlot)
-    signal requestEmptySlotChange(int newSlot, bool isStorageEmpty, int prevPlayer, int prevStorage, int prevSlot)
+    signal requestEmptySlotChange(int newSlot, bool isStorageEmpty, int prevPlayer, int prevStorage, int prevSlot, bool needsDirtyCheck)
     signal requestStorageChange(int newStorage)
     signal requestPlayerChange(int newPlayer)
     signal slotSaved()
@@ -481,7 +485,7 @@ Rectangle {
             slotSelected(firstSlot)
         } else {
             // All slots empty - ask user if they want to create a letter
-            requestEmptySlotChange(0, true, prevPlayer, prevStorage, prevSlot)
+            requestEmptySlotChange(0, true, prevPlayer, prevStorage, prevSlot, false)
         }
     }
 
@@ -518,7 +522,7 @@ Rectangle {
         // Reset to Inventory for creation
         backend.currentStorageType = 0
         slotList.model = backend.getSlotSummaries()
-        requestEmptySlotChange(0, true, prevPlayer, prevStorage, prevSlot)
+        requestEmptySlotChange(0, true, prevPlayer, prevStorage, prevSlot, false)
     }
 
     // Revert to a previous location (used when user cancels empty slot dialog)

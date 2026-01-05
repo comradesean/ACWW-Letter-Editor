@@ -783,9 +783,8 @@ ApplicationWindow {
                     }
 
                     // Handle empty slot click - show create letter dialog
-                    onRequestEmptySlotChange: function(newSlot, isStorageEmpty, prevPlayer, prevStorage, prevSlot) {
-                        dirtyState.check()
-                        dirtyState.confirmDiscard(function() {
+                    onRequestEmptySlotChange: function(newSlot, isStorageEmpty, prevPlayer, prevStorage, prevSlot, needsDirtyCheck) {
+                        function showDialog() {
                             createLetterDialog.slotNumber = newSlot + 1
                             createLetterDialog.pendingSlot = newSlot
                             createLetterDialog.isStorageEmpty = isStorageEmpty
@@ -793,7 +792,14 @@ ApplicationWindow {
                             createLetterDialog.prevStorage = prevStorage
                             createLetterDialog.prevSlot = prevSlot
                             createLetterDialog.open()
-                        })
+                        }
+
+                        if (needsDirtyCheck) {
+                            dirtyState.check()
+                            dirtyState.confirmDiscard(showDialog)
+                        } else {
+                            showDialog()
+                        }
                     }
                 }
 
@@ -2853,6 +2859,9 @@ ApplicationWindow {
         textSecondary: window.textSecondary
         textMuted: window.textMuted
         divider: window.divider
+
+        // Icons available when ROM is loaded
+        iconsAvailable: backend.loaded
 
         onConfirmed: {
             if (isSaveEmpty && pendingPlayer >= 0 && pendingStorage >= 0) {

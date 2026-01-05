@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-    }, Qt::QueuedConnection);
+    }); // Direct connection ensures this runs before QML bindings evaluate
 
     engine.load(url);
 
