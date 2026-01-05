@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
     QSurfaceFormat::setDefaultFormat(format);
 
     QGuiApplication app(argc, argv);
-    app.setApplicationName("ACWW Letter Previewer");
+    app.setApplicationName("Animal Crossing Wild World Letter Tool");
 
     // Set Material style
     QQuickStyle::setStyle("Material");
@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-    }, Qt::QueuedConnection);
+    }); // Direct connection ensures this runs before QML bindings evaluate
 
     engine.load(url);
 

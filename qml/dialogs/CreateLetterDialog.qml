@@ -26,6 +26,7 @@ Popup {
     property bool isStorageEmpty: false  // true when all slots in storage are empty
     property bool isSaveEmpty: false     // true when entire save has no letters
     property string storageName: ""      // storage name for save empty case
+    property bool iconsAvailable: false  // true when ROM is loaded and icons can be displayed
 
     signal confirmed()
     signal cancelled()
@@ -59,12 +60,30 @@ Popup {
                     radius: 24
                     color: Qt.rgba(accentPrimary.r, accentPrimary.g, accentPrimary.b, 0.15)
 
+                    // Letter icon from ROM (LETTER_WRITING icon, index 32, palette 0)
+                    // URL format: image://lettericons/<iconFlags>/<hasAttachment>
+                    // iconFlags 1 = LETTER_WRITING (see letter_icons.h)
+                    // The 'opened' check prevents early binding evaluation before the
+                    // C++ icon provider is connected to the IconLoader
+                    Image {
+                        id: letterIcon
+                        anchors.centerIn: parent
+                        width: 24
+                        height: 24
+                        source: createLetterDialog.opened && iconsAvailable ? "image://lettericons/1/0" : ""
+                        sourceSize: Qt.size(24, 24)
+                        smooth: false
+                        cache: false
+                        visible: iconsAvailable && status === Image.Ready
+                    }
+
+                    // Fallback if icon not available
                     Text {
                         anchors.centerIn: parent
-                        text: "+"
+                        text: "✉"
                         font.pixelSize: 24
-                        font.weight: Font.Bold
                         color: accentPrimary
+                        visible: !iconsAvailable || letterIcon.status !== Image.Ready
                     }
                 }
 

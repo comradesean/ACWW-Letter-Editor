@@ -63,6 +63,7 @@ class Backend : public QObject {
     Q_PROPERTY(int letterSource READ letterSource WRITE setLetterSource NOTIFY letterMetadataChanged)
     Q_PROPERTY(bool isGiftWrapped READ isGiftWrapped WRITE setGiftWrapped NOTIFY letterMetadataChanged)
     Q_PROPERTY(bool isLetterOpened READ isLetterOpened WRITE setLetterOpened NOTIFY letterMetadataChanged)
+    Q_PROPERTY(bool isWrittenByMe READ isWrittenByMe WRITE setWrittenByMe NOTIFY letterMetadataChanged)
 
     // ========================================
     // GUI/Display Properties (derived, not stored)
@@ -125,6 +126,7 @@ public:
     int letterSource() const { return m_letterSource; }
     bool isGiftWrapped() const { return (m_letterIconFlags & 0x40) != 0; }
     bool isLetterOpened() const;
+    bool isWrittenByMe() const;
 
     // GUI/Display getters (derived, not stored)
     QString letterHeader() const { return m_letterHeader; }
@@ -174,6 +176,7 @@ public:
     void setLetterSource(int source);
     void setGiftWrapped(bool wrapped);
     void setLetterOpened(bool opened);
+    void setWrittenByMe(bool writtenByMe);
 
     // GUI/Display setters (visual state only)
     void setRecipientNameStart(int pos);
@@ -198,6 +201,7 @@ public:
     Q_INVOKABLE QVariantList getSlotSummaries() const;
     Q_INVOKABLE void clearLetter();
     Q_INVOKABLE void importAddresseeFromSave();
+    Q_INVOKABLE void importSenderFromSave();
     Q_INVOKABLE bool playerExists(int player) const;
 
     // Item database access for QML

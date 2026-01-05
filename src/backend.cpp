@@ -369,6 +369,59 @@ void Backend::setLetterOpened(bool opened) {
     }
 }
 
+bool Backend::isWrittenByMe() const {
+    // Check lower nibble for writing states
+    // 0x01 = letter writing, 0x04 = bottle writing
+    uint8_t iconType = m_letterIconFlags & 0x0F;
+    return (iconType == 0x01 || iconType == 0x04);
+}
+
+void Backend::setWrittenByMe(bool writtenByMe) {
+    uint8_t iconType = m_letterIconFlags & 0x0F;
+    uint8_t upperNibble = m_letterIconFlags & 0xF0;
+    uint8_t newIconType = iconType;
+
+    if (writtenByMe) {
+        // Set to writing state (letter being written)
+        // Convert received states to writing state
+        switch (iconType) {
+            case 0x02:  // Letter unopened -> letter writing
+            case 0x03:  // Letter opened -> letter writing
+                newIconType = 0x01;
+                break;
+            case 0x05:  // Bottle unopened -> bottle writing
+            case 0x06:  // Bottle opened -> bottle writing
+                newIconType = 0x04;
+                break;
+            case 0x07:  // Special unopened -> letter writing (special has no writing state)
+            case 0x08:  // Special opened -> letter writing
+                newIconType = 0x01;
+                break;
+            default:
+                break;  // Already in writing state
+        }
+    } else {
+        // Set to received state (unopened)
+        switch (iconType) {
+            case 0x01:  // Letter writing -> letter unopened
+                newIconType = 0x02;
+                break;
+            case 0x04:  // Bottle writing -> bottle unopened
+                newIconType = 0x05;
+                break;
+            default:
+                break;  // Already in received state
+        }
+    }
+
+    uint8_t newFlags = upperNibble | newIconType;
+    if (newFlags != m_letterIconFlags) {
+        m_letterIconFlags = newFlags;
+        writeMetadataToData();  // Sync to m_letterData
+        emit letterMetadataChanged();
+    }
+}
+
 void Backend::setLetterSource(int source) {
     uint8_t newSource = static_cast<uint8_t>(source & 0xFF);
     if (newSource != m_letterSource) {
@@ -938,6 +991,34 @@ void Backend::importAddresseeFromSave() {
              << m_recipientName << "from" << m_recipientTown
              << "(Player ID:" << m_recipientPlayerId << ", Town ID:" << m_recipientTownId
              << ", Gender:" << m_recipientGender << ")";
+}
+
+void Backend::importSenderFromSave() {
+    if (!m_saveFile.isLoaded()) {
+        qDebug() << "Backend::importSenderFromSave: No save file loaded";
+        return;
+    }
+
+    // Get player info from current player in save file
+    m_senderName = m_saveFile.getPlayerName(m_currentPlayer);
+    m_senderTown = m_saveFile.getPlayerTown(m_currentPlayer);
+    m_senderPlayerId = m_saveFile.getPlayerId(m_currentPlayer);
+    m_senderTownId = m_saveFile.getTownId(m_currentPlayer);
+
+    // Set sender flag to Player (2) and import gender from save
+    m_senderRelation = 2;  // Player
+    m_senderGender = m_saveFile.getPlayerGender(m_currentPlayer);  // 0=male, 1=female
+
+    // Update the sender in the raw letter data
+    writeSenderToData();
+
+    emit senderInfoChanged();
+    emit letterMetadataChanged();
+
+    qDebug() << "Backend::importSenderFromSave: Imported"
+             << m_senderName << "from" << m_senderTown
+             << "(Player ID:" << m_senderPlayerId << ", Town ID:" << m_senderTownId
+             << ", Gender:" << m_senderGender << ")";
 }
 
 bool Backend::playerExists(int player) const {

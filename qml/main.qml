@@ -16,7 +16,7 @@ ApplicationWindow {
     height: 720
     minimumWidth: 580
     minimumHeight: 520
-    title: "Letter Previewer"
+    title: "Animal Crossing Wild World Letter Tool"
     flags: Qt.FramelessWindowHint | Qt.Window
 
     // Modern Color System - Ocean palette
@@ -352,23 +352,17 @@ ApplicationWindow {
                     z: 1
 
                     // App icon
-                    Rectangle {
+                    Image {
                         width: 22
                         height: 22
-                        radius: 6
-                        color: accentPrimary
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "✉"
-                            font.pixelSize: 11
-                            color: "#FFFFFF"
-                        }
+                        source: "qrc:/resources/icon.png"
+                        sourceSize: Qt.size(22, 22)
+                        smooth: true
                     }
 
                     // Title
                     Text {
-                        text: "Letter Previewer"
+                        text: "ACWW Letter Tool"
                         font.pixelSize: 12
                         font.weight: Font.Medium
                         color: textPrimary
@@ -500,6 +494,7 @@ ApplicationWindow {
                                 { text: "Edit Letter Info...", actionId: "editLetterInfo", enabledWhen: "loaded" },
                                 { text: "Edit Attached Item...", actionId: "editAttachedItem", enabledWhen: "loaded" },
                                 { text: "Import Addressee from Save", actionId: "importAddressee", enabledWhen: "saveLoaded" },
+                                { text: "Import Sender from Save", actionId: "importSender", enabledWhen: "saveLoaded" },
                                 { separator: true },
                                 { text: "View Hex...", actionId: "viewHex", enabledWhen: "loaded" },
                                 { separator: true },
@@ -674,6 +669,8 @@ ApplicationWindow {
                                                         backend.importAddresseeFromSave()
                                                         // Update canvas with new header
                                                         canvas.setLetterContent(backend.letterHeader, backend.letterBody, backend.letterFooter)
+                                                    } else if (actionId === "importSender") {
+                                                        backend.importSenderFromSave()
                                                     } else if (actionId === "nextPaper") {
                                                         if (backend.loaded && paperCombo.currentIndex < 63)
                                                             paperCombo.currentIndex++
@@ -783,9 +780,8 @@ ApplicationWindow {
                     }
 
                     // Handle empty slot click - show create letter dialog
-                    onRequestEmptySlotChange: function(newSlot, isStorageEmpty, prevPlayer, prevStorage, prevSlot) {
-                        dirtyState.check()
-                        dirtyState.confirmDiscard(function() {
+                    onRequestEmptySlotChange: function(newSlot, isStorageEmpty, prevPlayer, prevStorage, prevSlot, needsDirtyCheck) {
+                        function showDialog() {
                             createLetterDialog.slotNumber = newSlot + 1
                             createLetterDialog.pendingSlot = newSlot
                             createLetterDialog.isStorageEmpty = isStorageEmpty
@@ -793,7 +789,14 @@ ApplicationWindow {
                             createLetterDialog.prevStorage = prevStorage
                             createLetterDialog.prevSlot = prevSlot
                             createLetterDialog.open()
-                        })
+                        }
+
+                        if (needsDirtyCheck) {
+                            dirtyState.check()
+                            dirtyState.confirmDiscard(showDialog)
+                        } else {
+                            showDialog()
+                        }
                     }
                 }
 
@@ -1151,14 +1154,32 @@ ApplicationWindow {
 
                         CheckBox {
                             id: letterOpenedCheckbox
-                            // Disabled for writing states (0x01 = letter writing, 0x04 = bottle writing)
-                            property int iconType: backend.letterIconFlags & 0x0F
-                            property bool isWritingState: iconType === 0x01 || iconType === 0x04
-                            enabled: !isWritingState
+                            // Disabled when Written by Me is checked
+                            enabled: !backend.isWrittenByMe
                             checked: backend.isLetterOpened
                             onCheckedChanged: {
                                 if (checked !== backend.isLetterOpened) {
                                     backend.isLetterOpened = checked
+
+                                    // Update iconFlags based on relation and Opened state
+                                    if (!backend.isWrittenByMe) {
+                                        var relation = backend.recipientRelation
+                                        var upperNibble = backend.letterIconFlags & 0xF0
+                                        var newIconType
+                                        if (relation === 1 || relation === 2 || relation === 3) {
+                                            // Future Self, Player, Villager: 0x02/0x03
+                                            newIconType = checked ? 0x03 : 0x02
+                                        } else if (relation === 6 || relation === 7) {
+                                            // Bottle (System/Player): 0x05/0x06
+                                            newIconType = checked ? 0x06 : 0x05
+                                        } else if (relation === 5) {
+                                            // Green Letter: 0x07/0x08
+                                            newIconType = checked ? 0x08 : 0x07
+                                        } else {
+                                            newIconType = checked ? 0x03 : 0x02  // Default
+                                        }
+                                        backend.letterIconFlags = upperNibble | newIconType
+                                    }
                                 }
                             }
 
@@ -1204,7 +1225,7 @@ ApplicationWindow {
                             propagateComposedEvents: true
 
                             ToolTip {
-                                visible: letterOpenedCheckbox.isWritingState && openedMouseArea.containsMouse
+                                visible: backend.isWrittenByMe && openedMouseArea.containsMouse
                                 text: qsTr("Letters being written cannot be marked as opened")
                                 delay: 300
                                 timeout: 5000
@@ -1222,6 +1243,89 @@ ApplicationWindow {
                                     color: textPrimary
                                 }
                             }
+                        }
+                    }
+
+                    // Divider between Opened and Written by Me
+                    Rectangle {
+                        width: 1
+                        height: 20
+                        color: divider
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    // Written by Me checkbox
+                    CheckBox {
+                        id: writtenByMeCheckbox
+                        checked: backend.isWrittenByMe
+                        onCheckedChanged: {
+                            if (checked !== backend.isWrittenByMe) {
+                                backend.isWrittenByMe = checked
+
+                                var relation = backend.recipientRelation
+                                var upperNibble = backend.letterIconFlags & 0xF0
+                                var newIconType
+
+                                if (checked) {
+                                    // When checking Written by Me, validate and fix relation if needed
+                                    // Uncheck Opened (letters being written can't be opened)
+                                    backend.isLetterOpened = false
+
+                                    // Valid relations for Written by Me: 1 (Future Self), 2 (Player), 3 (Villager), 7 (Bottle Player)
+                                    var validRelations = [1, 2, 3, 7]
+                                    if (validRelations.indexOf(relation) === -1) {
+                                        // Invalid relation, default to Player (2)
+                                        backend.recipientRelation = 2
+                                        relation = 2
+                                    }
+                                    // Set iconFlags: Bottle Player (7) = 0x04, others = 0x01
+                                    newIconType = (relation === 7) ? 0x04 : 0x01
+                                } else {
+                                    // When unchecking Written by Me, set to received state based on relation
+                                    var opened = backend.isLetterOpened
+                                    if (relation === 1 || relation === 2 || relation === 3) {
+                                        // Future Self, Player, Villager: 0x02/0x03
+                                        newIconType = opened ? 0x03 : 0x02
+                                    } else if (relation === 6 || relation === 7) {
+                                        // Bottle (System/Player): 0x05/0x06
+                                        newIconType = opened ? 0x06 : 0x05
+                                    } else if (relation === 5) {
+                                        // Green Letter: 0x07/0x08
+                                        newIconType = opened ? 0x08 : 0x07
+                                    } else {
+                                        newIconType = opened ? 0x03 : 0x02  // Default
+                                    }
+                                }
+                                backend.letterIconFlags = upperNibble | newIconType
+                            }
+                        }
+
+                        indicator: Rectangle {
+                            implicitWidth: 16
+                            implicitHeight: 16
+                            x: writtenByMeCheckbox.leftPadding
+                            y: parent.height / 2 - height / 2
+                            radius: 3
+                            color: writtenByMeCheckbox.checked ? accentPrimary : bgHover
+                            border.color: writtenByMeCheckbox.checked ? accentPrimary : divider
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "✓"
+                                font.pixelSize: 10
+                                font.weight: Font.Bold
+                                color: bgBase
+                                visible: writtenByMeCheckbox.checked
+                            }
+                        }
+                        contentItem: Text {
+                            text: "Written by Me"
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                            color: textMuted
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: writtenByMeCheckbox.indicator.width + 4
                         }
                     }
 
@@ -1503,7 +1607,7 @@ ApplicationWindow {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Letter Previewer"
+                    text: "ACWW Letter Tool"
                     font.pixelSize: 20
                     font.weight: Font.DemiBold
                     color: textPrimary
@@ -1511,7 +1615,7 @@ ApplicationWindow {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Preview and compose letters with original game stationery"
+                    text: "Preview and edit letters with original game stationery"
                     font.pixelSize: 13
                     color: textSecondary
                 }
@@ -1969,7 +2073,9 @@ ApplicationWindow {
                                 font.pixelSize: 11
                                 topPadding: 0; bottomPadding: 0
                                 topInset: 0; bottomInset: 0
-                                model: ListModel {
+
+                                // Full model when not "Written by Me"
+                                property var fullModel: ListModel {
                                     ListElement { text: "Future Self"; value: 1 }
                                     ListElement { text: "Player"; value: 2 }
                                     ListElement { text: "Villager"; value: 3 }
@@ -1977,6 +2083,16 @@ ApplicationWindow {
                                     ListElement { text: "Bottle (System)"; value: 6 }
                                     ListElement { text: "Bottle (Player)"; value: 7 }
                                 }
+
+                                // Limited model when "Written by Me" is checked
+                                property var writtenByMeModel: ListModel {
+                                    ListElement { text: "Future Self"; value: 1 }
+                                    ListElement { text: "Player"; value: 2 }
+                                    ListElement { text: "Villager"; value: 3 }
+                                    ListElement { text: "Bottle (Player)"; value: 7 }
+                                }
+
+                                model: backend.isWrittenByMe ? writtenByMeModel : fullModel
                                 textRole: "text"
                                 currentIndex: recipientRelationCombo.findIndex(backend.recipientRelation)
                                 onActivated: {
@@ -1986,6 +2102,29 @@ ApplicationWindow {
                                     if (newValue !== 1 && newValue !== 2) {
                                         backend.recipientGender = 0
                                     }
+                                    // Update iconFlags based on relation and state
+                                    var upperNibble = backend.letterIconFlags & 0xF0
+                                    var newIconType
+                                    if (backend.isWrittenByMe) {
+                                        // Writing state: Bottle (Player) = 0x04, others = 0x01
+                                        newIconType = (newValue === 7) ? 0x04 : 0x01
+                                    } else {
+                                        // Received state: depends on relation and Opened flag
+                                        var opened = backend.isLetterOpened
+                                        if (newValue === 1 || newValue === 2 || newValue === 3) {
+                                            // Future Self, Player, Villager: 0x02/0x03
+                                            newIconType = opened ? 0x03 : 0x02
+                                        } else if (newValue === 6 || newValue === 7) {
+                                            // Bottle (System/Player): 0x05/0x06
+                                            newIconType = opened ? 0x06 : 0x05
+                                        } else if (newValue === 5) {
+                                            // Green Letter: 0x07/0x08
+                                            newIconType = opened ? 0x08 : 0x07
+                                        } else {
+                                            newIconType = 0x02  // Default
+                                        }
+                                    }
+                                    backend.letterIconFlags = upperNibble | newIconType
                                 }
                                 function findIndex(val) {
                                     for (var i = 0; i < model.count; i++) {
@@ -2853,6 +2992,9 @@ ApplicationWindow {
         textSecondary: window.textSecondary
         textMuted: window.textMuted
         divider: window.divider
+
+        // Icons available when ROM is loaded
+        iconsAvailable: backend.loaded
 
         onConfirmed: {
             if (isSaveEmpty && pendingPlayer >= 0 && pendingStorage >= 0) {
