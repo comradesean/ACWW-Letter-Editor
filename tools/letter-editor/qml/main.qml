@@ -2420,62 +2420,6 @@ ApplicationWindow {
                         }
                     }
 
-                    // Wrapped gift checkbox
-                    Row {
-                        width: parent.width
-                        spacing: 8
-
-                        CheckBox {
-                            id: wrappedGiftCheckbox
-                            enabled: {
-                                var hex = parseInt(attachedItemDialogField.text, 16)
-                                return !isNaN(hex) && hex !== 0xFFF1
-                            }
-                            checked: backend.isGiftWrapped
-                            onCheckedChanged: {
-                                if (checked !== backend.isGiftWrapped) {
-                                    backend.isGiftWrapped = checked
-                                }
-                            }
-                            onEnabledChanged: {
-                                // When disabled (no item), uncheck and clear wrapped flag
-                                if (!enabled && backend.isGiftWrapped) {
-                                    backend.isGiftWrapped = false
-                                }
-                            }
-                            indicator: Rectangle {
-                                implicitWidth: 18
-                                implicitHeight: 18
-                                x: wrappedGiftCheckbox.leftPadding
-                                y: parent.height / 2 - height / 2
-                                radius: 3
-                                color: wrappedGiftCheckbox.enabled
-                                    ? (wrappedGiftCheckbox.checked ? accentPrimary : bgHover)
-                                    : Qt.darker(bgHover, 1.2)
-                                border.color: wrappedGiftCheckbox.enabled
-                                    ? (wrappedGiftCheckbox.checked ? accentPrimary : divider)
-                                    : Qt.darker(divider, 1.2)
-                                border.width: 1
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "✓"
-                                    font.pixelSize: 12
-                                    font.weight: Font.Bold
-                                    color: bgBase
-                                    visible: wrappedGiftCheckbox.checked
-                                }
-                            }
-                            contentItem: Text {
-                                text: "Wrapped Gift"
-                                font.pixelSize: 11
-                                color: wrappedGiftCheckbox.enabled ? textPrimary : textMuted
-                                verticalAlignment: Text.AlignVCenter
-                                leftPadding: wrappedGiftCheckbox.indicator.width + 6
-                            }
-                        }
-                    }
-
                     // Category and Search row
                     Row {
                         width: parent.width
@@ -2593,11 +2537,79 @@ ApplicationWindow {
                         }
                     }
 
-                    // Item count
-                    Text {
-                        text: attachedItemDialog.filteredItems.length + " items"
-                        font.pixelSize: 10
-                        color: textMuted
+                    // Item count and wrapped gift checkbox
+                    Row {
+                        width: parent.width
+                        height: 14
+                        spacing: 8
+
+                        Text {
+                            text: attachedItemDialog.filteredItems.length + " items"
+                            font.pixelSize: 10
+                            color: textMuted
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Item { width: parent.width - 120; height: 1 }
+
+                        CheckBox {
+                            id: wrappedGiftCheckbox
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: 15
+                            padding: 0
+                            topPadding: 0
+                            bottomPadding: 0
+                            leftPadding: 0
+                            rightPadding: 0
+                            spacing: 0
+                            enabled: {
+                                var hex = parseInt(attachedItemDialogField.text, 16)
+                                return !isNaN(hex) && hex !== 0xFFF1
+                            }
+                            checked: backend.isGiftWrapped
+                            onCheckedChanged: {
+                                if (checked !== backend.isGiftWrapped) {
+                                    backend.isGiftWrapped = checked
+                                }
+                            }
+                            onEnabledChanged: {
+                                // When disabled (no item), uncheck and clear wrapped flag
+                                if (!enabled && backend.isGiftWrapped) {
+                                    backend.isGiftWrapped = false
+                                }
+                            }
+                            indicator: Rectangle {
+                                implicitWidth: 14
+                                implicitHeight: 14
+                                x: 0
+                                y: (wrappedGiftCheckbox.height - height) / 2
+                                radius: 2
+                                color: wrappedGiftCheckbox.enabled
+                                    ? (wrappedGiftCheckbox.checked ? accentPrimary : bgHover)
+                                    : Qt.darker(bgHover, 1.2)
+                                border.color: wrappedGiftCheckbox.enabled
+                                    ? (wrappedGiftCheckbox.checked ? accentPrimary : divider)
+                                    : Qt.darker(divider, 1.2)
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "✓"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                    color: bgBase
+                                    visible: wrappedGiftCheckbox.checked
+                                }
+                            }
+                            contentItem: Text {
+                                text: "Wrapped"
+                                font.pixelSize: 10
+                                color: wrappedGiftCheckbox.enabled ? textMuted : Qt.darker(textMuted, 1.3)
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: 18
+                            }
+                        }
                     }
 
                     // Item list
